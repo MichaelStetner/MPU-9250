@@ -32,6 +32,7 @@
 
  #define AHRS true         // set to false for basic data read
  #define SerialDebug true   // set to true to get Serial output for debugging
+ #define LCDDisplay false  // set to true to display output on attached Nokia 5110/3310 display
 
 #include <SPI.h>
 #include <Wire.h>
@@ -44,7 +45,9 @@
 // pin 7 - Data/Command select (D/C)
 // pin 5 - LCD chip select (CS)
 // pin 6 - LCD reset (RST)
+#if LCDDisplay
 Adafruit_PCD8544 display = Adafruit_PCD8544(9, 8, 7, 5, 6);
+#endif
 
 // See also MPU-9250 Register Map and Descriptions, Revision 4.0, RM-MPU-9250A-00, Rev. 1.4, 9/9/2013 for registers not listed in
 // above document; the MPU9250 and MPU9150 are virtually identical but the latter has a different register map
@@ -283,6 +286,7 @@ void setup()
   pinMode(myLed, OUTPUT);
   digitalWrite(myLed, HIGH);
 
+  #if LCDDisplay
   display.begin(); // Ini8ialize the display
   display.setContrast(58); // Set the contrast
 
@@ -301,16 +305,19 @@ void setup()
   display.setTextSize(1); // Set text size to normal, 2 is twice normal etc.
   display.setTextColor(BLACK); // Set pixel color; 1 on the monochrome screen
   display.clearDisplay();   // clears the screen and buffer
+  #endif
 
   // Read the WHO_AM_I register, this is a good test of communication
   byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
   Serial.print("MPU9250 "); Serial.print("I AM "); Serial.print(c, HEX); Serial.print(" I should be "); Serial.println(0x71, HEX);
+  #if LCDDisplay
   display.setCursor(20,0); display.print("MPU9250");
   display.setCursor(0,10); display.print("I AM");
   display.setCursor(0,20); display.print(c, HEX);
   display.setCursor(0,30); display.print("I Should Be");
   display.setCursor(0,40); display.print(0x71, HEX);
   display.display();
+  #endif
   delay(1000);
 
   if (c == 0x71) // WHO_AM_I should always be 0x68
@@ -326,6 +333,7 @@ void setup()
     Serial.print("z-axis self test: gyration trim within : "); Serial.print(SelfTest[5],1); Serial.println("% of factory value");
 
     calibrateMPU9250(gyroBias, accelBias); // Calibrate gyro and accelerometers, load biases in bias registers
+    #if LCDDisplay
     display.clearDisplay();
 
     display.setCursor(0, 0); display.print("MPU9250 bias");
@@ -342,6 +350,7 @@ void setup()
     display.setCursor(66, 24); display.print("o/s");
 
     display.display();
+    #endif
     delay(1000);
 
     initMPU9250();
@@ -350,6 +359,7 @@ void setup()
     // Read the WHO_AM_I register of the magnetometer, this is a good test of communication
     byte d = readByte(AK8963_ADDRESS, WHO_AM_I_AK8963);  // Read WHO_AM_I register for AK8963
     Serial.print("AK8963 "); Serial.print("I AM "); Serial.print(d, HEX); Serial.print(" I should be "); Serial.println(0x48, HEX);
+    #if LCDDisplay
     display.clearDisplay();
     display.setCursor(20,0); display.print("AK8963");
     display.setCursor(0,10); display.print("I AM");
@@ -357,6 +367,7 @@ void setup()
     display.setCursor(0,30); display.print("I Should Be");
     display.setCursor(0,40); display.print(0x48, HEX);
     display.display();
+    #endif
     delay(1000);
 
     // Get magnetometer calibration from AK8963 ROM
@@ -368,13 +379,14 @@ void setup()
     Serial.print("Y-Axis sensitivity adjustment value "); Serial.println(magCalibration[1], 2);
     Serial.print("Z-Axis sensitivity adjustment value "); Serial.println(magCalibration[2], 2);
   }
-
+    #if LCDDisplay
     display.clearDisplay();
     display.setCursor(20,0); display.print("AK8963");
     display.setCursor(0,10); display.print("ASAX "); display.setCursor(50,10); display.print(magCalibration[0], 2);
     display.setCursor(0,20); display.print("ASAY "); display.setCursor(50,20); display.print(magCalibration[1], 2);
     display.setCursor(0,30); display.print("ASAZ "); display.setCursor(50,30); display.print(magCalibration[2], 2);
     display.display();
+    #endif
     delay(1000);
   }
   else
@@ -461,7 +473,7 @@ void loop()
    // Print temperature in degrees Centigrade
     Serial.print("Temperature is ");  Serial.print(temperature, 1);  Serial.println(" degrees C"); // Print T values to tenths of s degree C
     }
-
+    #if LCDDisplay
     display.clearDisplay();
     display.setCursor(0, 0); display.print("MPU9250/AK8963");
     display.setCursor(0, 8); display.print(" x   y   z  ");
@@ -484,6 +496,7 @@ void loop()
     display.setCursor(0,  40); display.print("Gyro T ");
     display.setCursor(50,  40); display.print(temperature, 1); display.print(" C");
     display.display();
+    #endif
 
     count = millis();
     digitalWrite(myLed, !digitalRead(myLed));  // toggle led
@@ -540,6 +553,7 @@ void loop()
     Serial.print("rate = "); Serial.print((float)sumCount/sum, 2); Serial.println(" Hz");
     }
 
+    #if LCDDisplay
     display.clearDisplay();
 
     display.setCursor(0, 0); display.print(" x   y   z  ");
@@ -577,6 +591,7 @@ void loop()
     // The 3.3 V 8 MHz Pro Mini is doing pretty well!
     display.setCursor(0, 40); display.print("rt: "); display.print((float) sumCount / sum, 2); display.print(" Hz");
     display.display();
+    #endif
 
     count = millis();
     sumCount = 0;
