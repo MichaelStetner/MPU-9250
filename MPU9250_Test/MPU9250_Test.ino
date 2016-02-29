@@ -13,7 +13,17 @@ This uses Kris Winer's MPU9250 library (https://github.com/kriswiner/MPU-9250).
 */
 
 #include <Wire.h>
-#include <MPU9250.h>
+
+#define ADO 1
+#if ADO
+#define MPU9250_ADDRESS 0x69  // Device address when ADO = 1
+#else
+#define MPU9250_ADDRESS 0x68  // Device address when ADO = 0
+#define AK8963_ADDRESS 0x0C   //  Address of magnetometer
+#endif  
+#define WHO_AM_I_MPU9250 0x75 // Should return 0x71
+
+unsigned int cnt = 0;
 
 void setup() {
   Wire.begin();
@@ -21,17 +31,21 @@ void setup() {
   Serial.begin(9600);
   Serial.println("The MPU9250 should say that it is 0x71.");
 
-  MPU9250 mpu9250;
-
-  unsigned int cnt = 0;
 }
 
 void loop() {
+  cnt = cnt + 1;
   Serial.print("Loop ");
   Serial.print(cnt);
   Serial.print(" - ");
   Serial.print("MPU9250 says it is ");
-  unsigned int whoami = mpu9250.readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);
-  Serial.println(whoami, HEX);
+
+  Wire.beginTransmission(MPU9250_ADDRESS);
+  Wire.write(WHO_AM_I_MPU9250);
+  Wire.endTransmission();
+  Wire.requestFrom(MPU9250_ADDRESS, 1);
+  int value = Wire.read();
+  Wire.endTransmission();
+  Serial.println(value, HEX);
   delay(100);
 }
