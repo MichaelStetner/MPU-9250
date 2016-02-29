@@ -36,8 +36,11 @@
 
 #include <SPI.h>
 #include <Wire.h>
+
+#if LCDDisplay
 #include <Adafruit_GFX.h>
 #include <Adafruit_PCD8544.h>
+#endif
 
 // Using NOKIA 5110 monochrome 84 x 48 pixel display
 // pin 9 - Serial clock out (SCLK)
