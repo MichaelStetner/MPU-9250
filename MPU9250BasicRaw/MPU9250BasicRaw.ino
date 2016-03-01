@@ -35,6 +35,7 @@
  // false for string (Serial.print)
 
 #define DEBUGPRINT true
+#define USE_COMPASS false
  
 #include <Wire.h>
 
@@ -304,6 +305,7 @@ void setup() {
   #endif
   delay(500);
 
+  #if USE_COMPASS
   // Read the WHO_AM_I register of the magnetometer, this is a good test of communication
   byte d = readByte(AK8963_ADDRESS, WHO_AM_I_AK8963);  // Read WHO_AM_I register for AK8963
   if (d != 0x48) {
@@ -335,6 +337,7 @@ void setup() {
   #endif
 
   delay(500);
+  #endif
 }
 
 
@@ -365,6 +368,7 @@ void loop() {
     gy = (float)gyroCount[1]*gRes;
     gz = (float)gyroCount[2]*gRes;
 
+    #if USE_COMPASS
     readMagData(magCount);  // Read the x/y/z adc values
     #if DEBUGPRINT
     Serial.println("Mag has been read");
@@ -379,6 +383,7 @@ void loop() {
     mx = (float)magCount[0]*mRes*magCalibration[0] - magbias[0];  // get actual magnetometer value, this depends on scale being set
     my = (float)magCount[1]*mRes*magCalibration[1] - magbias[1];
     mz = (float)magCount[2]*mRes*magCalibration[2] - magbias[2];
+    #endif
 
     #if SerialBinaryMode
     Serial.write(0x24);
@@ -387,7 +392,9 @@ void loop() {
     Serial.write(millis());
     Serial.write(accelCount, 3);
     Serial.write(gyroCount,  3);
+    #if USE_COMPASS
     Serial.write(magCount,   3);
+    #endif
     #else
     Serial.print('$');
     Serial.print(millis());
@@ -403,12 +410,14 @@ void loop() {
     Serial.print(gyroCount[1]);
     Serial.print(',');
     Serial.print(gyroCount[2]);
+    #if USE_COMPASS
     Serial.print(',');
     Serial.print(magCount[0]);
     Serial.print(',');
     Serial.print(magCount[1]);
     Serial.print(',');
     Serial.print(magCount[2]);
+    #endif
     Serial.println("");
     #endif    
   } else {
