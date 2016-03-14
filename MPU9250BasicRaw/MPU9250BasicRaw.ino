@@ -36,10 +36,11 @@
  // true for binary  (Serial.write)
  // false for string (Serial.print)
 
-#define DEBUGPRINT true
+#define DEBUGPRINT false
 #define USE_COMPASS false
 
 #include <Wire.h>
+#include "Registers.h"
 
 
 // Seven-bit device address is 110100 for ADO = 0 and 110101 for ADO = 1
@@ -124,7 +125,9 @@ void setup() {
 
   // Read the WHO_AM_I register, this is a good test of communication
   byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
+  #if DEBUGPRINT
   Serial.print("MPU9250 "); Serial.print("I AM "); Serial.print(c, HEX); Serial.print(" I should be "); Serial.println(0x71, HEX);
+  #endif // DEBUGPRINT
   delay(500);
 
   if (c != 0x71) {
@@ -135,19 +138,23 @@ void setup() {
     #endif
     while(1) ; // Loop forever if communication doesn't happen
   }
+  #if DEBUGPRINT
   Serial.println("MPU9250 is online...");
+  #endif // DEBUGPRINT
 
   MPU9250SelfTest(SelfTest); // Start by performing self test and reporting values
   #if SerialBinaryMode
   Serial.Write(SelfTest, 6);
   #else
+  #if DEBUGPRINT
   Serial.print("x-axis self test: acceleration trim within : "); Serial.print(SelfTest[0],1); Serial.println("% of factory value");
   Serial.print("y-axis self test: acceleration trim within : "); Serial.print(SelfTest[1],1); Serial.println("% of factory value");
   Serial.print("z-axis self test: acceleration trim within : "); Serial.print(SelfTest[2],1); Serial.println("% of factory value");
   Serial.print("x-axis self test: gyration trim within : "); Serial.print(SelfTest[3],1); Serial.println("% of factory value");
   Serial.print("y-axis self test: gyration trim within : "); Serial.print(SelfTest[4],1); Serial.println("% of factory value");
   Serial.print("z-axis self test: gyration trim within : "); Serial.print(SelfTest[5],1); Serial.println("% of factory value");
-  #endif
+  #endif // DEBUGPRINT
+  #endif // SerialBinaryMode
 
   calibrateMPU9250(gyroBias, accelBias); // Calibrate gyro and accelerometers, load biases in bias registers
   delay(1000);
@@ -155,7 +162,9 @@ void setup() {
   initMPU9250();
   #if SerialBinaryMode
   #else
+  #if DEBUGPRINT
   Serial.println("MPU9250 initialized for active data mode...."); // Initialize device for active mode read of acclerometer, gyroscope, and temperature
+  #endif
   #endif
   delay(500);
 
@@ -275,11 +284,11 @@ void loop() {
     Serial.print(zeropad(magCount[2], ZERO_PADDING_MEASUREMENTS));
     #else // USE_COMPASS
     Serial.print(',');
-    Serial.print(0, ZERO_PADDING_MEASUREMENTS);
+    Serial.print(zeropad(0, ZERO_PADDING_MEASUREMENTS));
     Serial.print(',');
-    Serial.print(0, ZERO_PADDING_MEASUREMENTS);
+    Serial.print(zeropad(0, ZERO_PADDING_MEASUREMENTS));
     Serial.print(',');
-    Serial.print(0, ZERO_PADDING_MEASUREMENTS);
+    Serial.print(zeropad(0, ZERO_PADDING_MEASUREMENTS));
     #endif // USE_COMPASS
     Serial.println("");
     #endif // SerialBinaryMode
