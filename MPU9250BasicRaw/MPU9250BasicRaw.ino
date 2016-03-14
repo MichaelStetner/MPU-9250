@@ -28,8 +28,20 @@
 
   // Seven-bit device address is 110100 for ADO = 0 and 110101 for ADO = 1
  #define ADO 1
+
  #define ZERO_PADDING_MEASUREMENTS 5
  #define ZERO_PADDING_TIMER 10
+
+// Sync pulses
+//   To synchronize Arduino recordings with another recording system,
+//   emit sync pulses. When a sync pulse occurs, the SYNC_PIN goes high
+//   for SYNC_PULSE_MICROSECONDS and the Arduino prints a 1 at the end 
+//   of the line for the current sample. In samples without a sync 
+//   pulse, the Arduino prints a zero instead. Sync pulses are emitted 
+//   when the computer uses serial writes a 1. The sync pin output 
+//   should be recorded on the other data acquisition system. 
+#define SYNC_PIN 12
+#define SYNC_PULSE_MICROSECONDS 50 // duration of sync "click" pulse
 
  #define SerialBinaryMode false
  // Format of serial output
@@ -122,6 +134,7 @@ float eInt[3] = {0.0f, 0.0f, 0.0f};       // vector to hold integral error for M
 void setup() {
   Wire.begin();
   Serial.begin(115200);
+  pinMode(SYNC_PIN, OUTPUT); // to the speaker for sync pulse
 
   // Read the WHO_AM_I register, this is a good test of communication
   byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
@@ -290,6 +303,20 @@ void loop() {
     Serial.print(',');
     Serial.print(zeropad(0, ZERO_PADDING_MEASUREMENTS));
     #endif // USE_COMPASS
+    // Sync pulse
+    // When we receive 1 over serial, emit a pulse (duration SYNC_PULSE_MICROSECONDS) over SYNC_PIN.
+    int is_sync = 0;
+    if (Serial.available() > 0) {
+      int msg = Serial.read();
+      if (msg == 1 || msg == 49) { // 49 is ASCII code for "1"
+        digitalWrite(SYNC_PIN, HIGH);
+        delayMicroseconds(SYNC_PULSE_MICROSECONDS);
+        digitalWrite(SYNC_PIN, LOW);
+        is_sync = 1;
+      }
+    }
+    Serial.print(',');
+    Serial.print(is_sync);
     Serial.println("");
     #endif // SerialBinaryMode
   } else {
