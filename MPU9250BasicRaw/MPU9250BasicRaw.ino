@@ -28,6 +28,8 @@
 
   // Seven-bit device address is 110100 for ADO = 0 and 110101 for ADO = 1
  #define ADO 1
+ #define ZERO_PADDING_MEASUREMENTS 5
+ #define ZERO_PADDING_TIMER 10
 
  #define SerialBinaryMode false
  // Format of serial output
@@ -118,7 +120,7 @@ float eInt[3] = {0.0f, 0.0f, 0.0f};       // vector to hold integral error for M
 
 void setup() {
   Wire.begin();
-  Serial.begin(38400);
+  Serial.begin(115200);
 
   // Read the WHO_AM_I register, this is a good test of communication
   byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
@@ -246,32 +248,41 @@ void loop() {
     Serial.write(gyroCount,  3);
     #if USE_COMPASS
     Serial.write(magCount,   3);
-    #endif
-    #else
-    Serial.print('$');
-    Serial.print(millis());
+    #endif // USE_COMPASS
+    #else // SerialBinaryMode
+
+    Serial.print('!');
+    Serial.print(zeropad(millis(), ZERO_PADDING_TIMER));
     Serial.print(',');
-    Serial.print(accelCount[0]);
+    // Gyroscope
+    Serial.print(zeropad(gyroCount[0], ZERO_PADDING_MEASUREMENTS));
     Serial.print(',');
-    Serial.print(accelCount[1]);
+    Serial.print(zeropad(gyroCount[1], ZERO_PADDING_MEASUREMENTS));
     Serial.print(',');
-    Serial.print(accelCount[2]);
+    Serial.print(zeropad(gyroCount[2], ZERO_PADDING_MEASUREMENTS));
     Serial.print(',');
-    Serial.print(gyroCount[0]);
+    Serial.print(zeropad(accelCount[0], ZERO_PADDING_MEASUREMENTS));
     Serial.print(',');
-    Serial.print(gyroCount[1]);
+    Serial.print(zeropad(accelCount[1], ZERO_PADDING_MEASUREMENTS));
     Serial.print(',');
-    Serial.print(gyroCount[2]);
+    Serial.print(zeropad(accelCount[2], ZERO_PADDING_MEASUREMENTS));
     #if USE_COMPASS
     Serial.print(',');
-    Serial.print(magCount[0]);
+    Serial.print(zeropad(magCount[0], ZERO_PADDING_MEASUREMENTS));
     Serial.print(',');
-    Serial.print(magCount[1]);
+    Serial.print(zeropad(magCount[1], ZERO_PADDING_MEASUREMENTS));
     Serial.print(',');
-    Serial.print(magCount[2]);
-    #endif
+    Serial.print(zeropad(magCount[2], ZERO_PADDING_MEASUREMENTS));
+    #else // USE_COMPASS
+    Serial.print(',');
+    Serial.print(0, ZERO_PADDING_MEASUREMENTS);
+    Serial.print(',');
+    Serial.print(0, ZERO_PADDING_MEASUREMENTS);
+    Serial.print(',');
+    Serial.print(0, ZERO_PADDING_MEASUREMENTS);
+    #endif // USE_COMPASS
     Serial.println("");
-    #endif
+    #endif // SerialBinaryMode
   } else {
     #if DEBUGPRINT
     Serial.print(millis());
@@ -845,6 +856,9 @@ void MPU9250SelfTest(float * destination) // Should return percent deviation fro
 	uint8_t i = 0;
         Wire.requestFrom(address, count);  // Read bytes from slave register address
 	while (Wire.available()) {
+    #if DEBUGPRINT
     Serial.println(i);
-        dest[i++] = Wire.read(); }         // Put read results in the Rx buffer
+    #endif
+    dest[i++] = Wire.read(); // Put read results in the Rx buffer
+  }
 }
