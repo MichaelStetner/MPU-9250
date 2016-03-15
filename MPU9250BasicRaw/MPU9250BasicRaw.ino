@@ -48,7 +48,7 @@
  // true for binary  (Serial.write)
  // false for string (Serial.print)
 
-#define DEBUGPRINT false
+#define DEBUGPRINT true
 #define USE_COMPASS false
 
 #include <Wire.h>
@@ -134,6 +134,7 @@ float eInt[3] = {0.0f, 0.0f, 0.0f};       // vector to hold integral error for M
 void setup() {
   Wire.begin();
   Serial.begin(115200);
+  Serial.println("Arduino online");
   pinMode(SYNC_PIN, OUTPUT); // to the speaker for sync pulse
 
   // Read the WHO_AM_I register, this is a good test of communication
@@ -870,14 +871,14 @@ void MPU9250SelfTest(float * destination) // Should return percent deviation fro
     case 2:
       // Received NACK on transmit of address
       #if DEBUGPRINT
-      Serial.print("Error in I2C: Received NACK on transmit of address: ");
+      Serial.print("Error in I2C: Received NACK on transmit of address: 0x");
       Serial.println(address, HEX);
       #endif
       break;
     case 3:
       // Received NACK on transmit of data
       #if DEBUGPRINT
-      Serial.print("Error in I2C: Received NACK on transmit of data: ");
+      Serial.print("Error in I2C: Received NACK on transmit of data: 0x");
       Serial.println(subAddress, HEX);
       #endif
       break;
