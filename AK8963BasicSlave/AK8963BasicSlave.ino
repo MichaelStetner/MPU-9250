@@ -7,7 +7,10 @@
 
 #define AK8963_ADDRESS   0x0C
 #define WHO_AM_I_AK8963  0x00 // should return 0x48
+#define AK8963_XOUT_L    0x03  // data
+#define AK8963_CNTL      0x0A  // Power down (0000), single-measurement (0001), self-test (1000) and Fuse ROM (1111) modes on bits 3:0
 #define MPU9250_ADDRESS  0x69
+#define INT_PIN_CFG      0x37
 #define I2C_MST_CTRL     0x24
 #define I2C_SLV0_ADDR    0x25
 #define I2C_SLV0_REG     0x26
@@ -30,6 +33,17 @@ void setup() {
   Serial.println("MPU9250 should be 0x71");
   delay(500);
 
+  // Set up magnetometer
+  Serial.println("");
+  writeByte(MPU9250_ADDRESS, INT_PIN_CFG, 0x02); // enable pass thru when i2c master disabled
+  writeByte(MPU9250_ADDRESS, USER_CTRL, B00000000); // turn off i2c master on mpu9250
+  delay(500);
+  c = readByte(AK8963_ADDRESS, WHO_AM_I_AK8963);
+  Serial.print("AK8963 says I AM 0x");
+  Serial.println(c, HEX);
+  Serial.println("AK8963 should be 0x48");
+  writeByte(AK8963_ADDRESS, AK8963_CNTL, B00000010);
+
   // Enable I2C master functionality
   writeByte(MPU9250_ADDRESS, I2C_MST_CTRL, B00001000);
   //  Bit   Name           Description
@@ -45,12 +59,17 @@ void setup() {
   writeByte(MPU9250_ADDRESS, I2C_SLV0_ADDR, 128 + AK8963_ADDRESS);
   // First bit is "1" for read
 
-  writeByte(MPU9250_ADDRESS, I2C_SLV0_REG, WHO_AM_I_AK8963);
+  writeByte(MPU9250_ADDRESS, I2C_SLV0_REG, AK8963_XOUT_L);
   // Value read should be 0x48
 
-  writeByte(MPU9250_ADDRESS, I2C_SLV0_CTRL, B10000001);
-  // FIXME What does bit 5 do? "When set, the transaction does not write a register value, it will only read data, or write data"
-
+  writeByte(MPU9250_ADDRESS, I2C_SLV0_CTRL, B10000111);
+  //  Bit   Name              Description
+  //   7    I2C_SLV0_EN       Use this slave device (1 to enable)
+  //   6    I2C_SLV0_BYTE_SW  Swap bytes in a word? (1 to enable)
+  //   5    I2C_SLV0_REG_DIS  "When set, the transaction does not write a register value, it will only read data, or write data"
+  //   4    I2C_SLV0_GRP      Grouping of bytes into words (0 for [0 1] [2 3]...; 1 for 0 [1 2] [3 4]...)
+  //  3:0   I2C_MST_CLK       Number of bytes to read (seven bytes = B0111)
+  
   // Enable I2C master
   writeByte(MPU9250_ADDRESS, USER_CTRL, B00100000);
 /*
@@ -69,11 +88,15 @@ void loop(){
   Serial.print("MPU9250 says I AM 0x");
   Serial.println(c, HEX);
   delay(500);
-  
-  c = readByte(MPU9250_ADDRESS, 73);
+
   Serial.print(millis());
-  Serial.print(" External sensor says 0x");
-  Serial.println(c, HEX);
+  Serial.print(" External sensor says");
+  for (int regaddr=73; regaddr<=78; regaddr++) {
+    c = readByte(MPU9250_ADDRESS, regaddr);
+    Serial.print(" 0x");
+    Serial.print(c, HEX);
+  }
+  Serial.println("");
   delay(500);
 }
 
