@@ -48,7 +48,7 @@
  // true for binary  (Serial.write)
  // false for string (Serial.print)
 
-#define DEBUGPRINT true
+#define DEBUGPRINT false
 #define USE_COMPASS false
 
 #include <Wire.h>
