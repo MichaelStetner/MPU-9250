@@ -63,33 +63,6 @@
 #define AK8963_ADDRESS 0x0C   //  Address of magnetometer
 #endif
 
-// Set initial input parameters
-enum Ascale {
-  AFS_2G = 0,
-  AFS_4G,
-  AFS_8G,
-  AFS_16G
-};
-
-enum Gscale {
-  GFS_250DPS = 0,
-  GFS_500DPS,
-  GFS_1000DPS,
-  GFS_2000DPS
-};
-
-enum Mscale {
-  MFS_14BITS = 0, // 0.6 mG per LSB
-  MFS_16BITS      // 0.15 mG per LSB
-};
-
-// Specify sensor full scale
-uint8_t Gscale = GFS_250DPS;
-uint8_t Ascale = AFS_2G;
-uint8_t Mscale = MFS_16BITS; // Choose either 14-bit or 16-bit magnetometer resolution
-uint8_t Mmode = 0x02;        // 2 for 8 Hz, 6 for 100 Hz continuous magnetometer data read
-float aRes, gRes, mRes;      // scale resolutions per LSB for the sensors
-
 // Pin definitions
 int intPin = 12;  // These can be changed, 2 and 3 are the Arduinos ext int pins
 int myLed = 13; // Set up pin 13 led for toggling
@@ -102,34 +75,6 @@ float gyroBias[3] = {0, 0, 0}, accelBias[3] = {0, 0, 0};      // Bias correction
 int16_t tempCount;      // temperature raw count output
 float   temperature;    // Stores the real internal chip temperature in degrees Celsius
 float   SelfTest[6];    // holds results of gyro and accelerometer self test
-
-// global constants for 9 DoF fusion and AHRS (Attitude and Heading Reference System)
-float GyroMeasError = PI * (40.0f / 180.0f);   // gyroscope measurement error in rads/s (start at 40 deg/s)
-float GyroMeasDrift = PI * (0.0f  / 180.0f);   // gyroscope measurement drift in rad/s/s (start at 0.0 deg/s/s)
-// There is a tradeoff in the beta parameter between accuracy and response speed.
-// In the original Madgwick study, beta of 0.041 (corresponding to GyroMeasError of 2.7 degrees/s) was found to give optimal accuracy.
-// However, with this value, the LSM9SD0 response time is about 10 seconds to a stable initial quaternion.
-// Subsequent changes also require a longish lag time to a stable output, not fast enough for a quadcopter or robot car!
-// By increasing beta (GyroMeasError) by about a factor of fifteen, the response time constant is reduced to ~2 sec
-// I haven't noticed any reduction in solution accuracy. This is essentially the I coefficient in a PID control sense;
-// the bigger the feedback coefficient, the faster the solution converges, usually at the expense of accuracy.
-// In any case, this is the free parameter in the Madgwick filtering and fusion scheme.
-float beta = sqrt(3.0f / 4.0f) * GyroMeasError;   // compute beta
-float zeta = sqrt(3.0f / 4.0f) * GyroMeasDrift;   // compute zeta, the other free parameter in the Madgwick scheme usually set to a small or zero value
-#define Kp 2.0f * 5.0f // these are the free parameters in the Mahony filter and fusion scheme, Kp for proportional feedback, Ki for integral
-#define Ki 0.0f
-
-uint32_t delt_t = 0; // used to control display output rate
-uint32_t count = 0, sumCount = 0; // used to control display output rate
-float pitch, yaw, roll;
-float deltat = 0.0f, sum = 0.0f;        // integration interval for both filter schemes
-uint32_t lastUpdate = 0, firstUpdate = 0; // used to calculate integration interval
-uint32_t Now = 0;        // used to calculate integration interval
-
-float ax, ay, az, gx, gy, gz, mx, my, mz; // variables to hold latest sensor data values
-float q[4] = {1.0f, 0.0f, 0.0f, 0.0f};    // vector to hold quaternion
-float eInt[3] = {0.0f, 0.0f, 0.0f};       // vector to hold integral error for Mahony method
-
 
 void setup() {
   i2cStart();
@@ -227,41 +172,21 @@ void loop() {
     Serial.println("Accel has been read");
     #endif
 
-    getAres();
-
-    // Now we'll calculate the accleration value into actual g's
-    ax = (float)accelCount[0]*aRes; // - accelBias[0];  // get actual g value, this depends on scale being set
-    ay = (float)accelCount[1]*aRes; // - accelBias[1];
-    az = (float)accelCount[2]*aRes; // - accelBias[2];
-
     readGyroData(gyroCount);  // Read the x/y/z adc values
     #if DEBUGPRINT
     Serial.println("Gyro has been read");
     #endif
     getGres();
 
-    // Calculate the gyro value into actual degrees per second
-    gx = (float)gyroCount[0]*gRes;  // get actual gyro value, this depends on scale being set
-    gy = (float)gyroCount[1]*gRes;
-    gz = (float)gyroCount[2]*gRes;
-
     #if USE_COMPASS
     readMagData(magCount);  // Read the x/y/z adc values
     #if DEBUGPRINT
     Serial.println("Mag has been read");
-    #endif
-    getMres();
-    magbias[0] = +470.;  // User environmental x-axis correction in milliGauss, should be automatically calculated
-    magbias[1] = +120.;  // User environmental x-axis correction in milliGauss
-    magbias[2] = +125.;  // User environmental x-axis correction in milliGauss
+    #endif // DEBUGPRINT
+    #endif // USE_COMPASS
 
-    // Calculate the magnetometer values in milliGauss
-    // Include factory calibration per data sheet and user environmental corrections
-    mx = (float)magCount[0]*mRes*magCalibration[0] - magbias[0];  // get actual magnetometer value, this depends on scale being set
-    my = (float)magCount[1]*mRes*magCalibration[1] - magbias[1];
-    mz = (float)magCount[2]*mRes*magCalibration[2] - magbias[2];
-    #endif
-
+    ////////////////////////////////////////////////////////////////////////////
+    //----------------------- Print output -----------------------------------//
     #if SerialBinaryMode
     Serial.write(0x24);
     Serial.write(0x24);
@@ -327,141 +252,6 @@ void loop() {
     #endif
   }
 }
-/*
-  Now = micros();
-  deltat = ((Now - lastUpdate)/1000000.0f); // set integration time by time elapsed since last filter update
-  lastUpdate = Now;
-
-  sum += deltat; // sum for averaging filter update rate
-  sumCount++;
-
-  // Sensors x (y)-axis of the accelerometer is aligned with the y (x)-axis of the magnetometer;
-  // the magnetometer z-axis (+ down) is opposite to z-axis (+ up) of accelerometer and gyro!
-  // We have to make some allowance for this orientationmismatch in feeding the output to the quaternion filter.
-  // For the MPU-9250, we have chosen a magnetic rotation that keeps the sensor forward along the x-axis just like
-  // in the LSM9DS0 sensor. This rotation can be modified to allow any convenient orientation convention.
-  // This is ok by aircraft orientation standards!
-  // Pass gyro rate as rad/s
-//  MadgwickQuaternionUpdate(ax, ay, az, gx*PI/180.0f, gy*PI/180.0f, gz*PI/180.0f,  my,  mx, mz);
-  MahonyQuaternionUpdate(ax, ay, az, gx*PI/180.0f, gy*PI/180.0f, gz*PI/180.0f, my, mx, mz);
-
-
-    if (!AHRS) {
-    delt_t = millis() - count;
-    if(delt_t > 500) {
-
-    if(SerialDebug) {
-    // Print acceleration values in milligs!
-    Serial.print("X-acceleration: "); Serial.print(1000*ax); Serial.print(" mg ");
-    Serial.print("Y-acceleration: "); Serial.print(1000*ay); Serial.print(" mg ");
-    Serial.print("Z-acceleration: "); Serial.print(1000*az); Serial.println(" mg ");
-
-    // Print gyro values in degree/sec
-    Serial.print("X-gyro rate: "); Serial.print(gx, 3); Serial.print(" degrees/sec ");
-    Serial.print("Y-gyro rate: "); Serial.print(gy, 3); Serial.print(" degrees/sec ");
-    Serial.print("Z-gyro rate: "); Serial.print(gz, 3); Serial.println(" degrees/sec");
-
-    // Print mag values in degree/sec
-    Serial.print("X-mag field: "); Serial.print(mx); Serial.print(" mG ");
-    Serial.print("Y-mag field: "); Serial.print(my); Serial.print(" mG ");
-    Serial.print("Z-mag field: "); Serial.print(mz); Serial.println(" mG");
-
-    tempCount = readTempData();  // Read the adc values
-    temperature = ((float) tempCount) / 333.87 + 21.0; // Temperature in degrees Centigrade
-   // Print temperature in degrees Centigrade
-    Serial.print("Temperature is ");  Serial.print(temperature, 1);  Serial.println(" degrees C"); // Print T values to tenths of s degree C
-    }
-
-    count = millis();
-    digitalWrite(myLed, !digitalRead(myLed));  // toggle led
-    }
-    }
-    else {
-
-    // Serial print and/or display at 0.5 s rate independent of data rates
-    delt_t = millis() - count;
-    if (delt_t > 500) { // update LCD once per half-second independent of read rate
-
-    if(SerialDebug) {
-    Serial.print("ax = "); Serial.print((int)1000*ax);
-    Serial.print(" ay = "); Serial.print((int)1000*ay);
-    Serial.print(" az = "); Serial.print((int)1000*az); Serial.println(" mg");
-    Serial.print("gx = "); Serial.print( gx, 2);
-    Serial.print(" gy = "); Serial.print( gy, 2);
-    Serial.print(" gz = "); Serial.print( gz, 2); Serial.println(" deg/s");
-    Serial.print("mx = "); Serial.print( (int)mx );
-    Serial.print(" my = "); Serial.print( (int)my );
-    Serial.print(" mz = "); Serial.print( (int)mz ); Serial.println(" mG");
-
-    Serial.print("q0 = "); Serial.print(q[0]);
-    Serial.print(" qx = "); Serial.print(q[1]);
-    Serial.print(" qy = "); Serial.print(q[2]);
-    Serial.print(" qz = "); Serial.println(q[3]);
-    }
-
-
-}*/
-
-//===================================================================================================================
-//====== Set of useful function to access acceleration. gyroscope, magnetometer, and temperature data
-//===================================================================================================================
-
-void getMres() {
-  switch (Mscale)
-  {
- 	// Possible magnetometer scales (and their register bit settings) are:
-	// 14 bit resolution (0) and 16 bit resolution (1)
-    case MFS_14BITS:
-          mRes = 10.*4912./8190.; // Proper scale to return milliGauss
-          break;
-    case MFS_16BITS:
-          mRes = 10.*4912./32760.0; // Proper scale to return milliGauss
-          break;
-  }
-}
-
-void getGres() {
-  switch (Gscale)
-  {
- 	// Possible gyro scales (and their register bit settings) are:
-	// 250 DPS (00), 500 DPS (01), 1000 DPS (10), and 2000 DPS  (11).
-        // Here's a bit of an algorith to calculate DPS/(ADC tick) based on that 2-bit value:
-    case GFS_250DPS:
-          gRes = 250.0/32768.0;
-          break;
-    case GFS_500DPS:
-          gRes = 500.0/32768.0;
-          break;
-    case GFS_1000DPS:
-          gRes = 1000.0/32768.0;
-          break;
-    case GFS_2000DPS:
-          gRes = 2000.0/32768.0;
-          break;
-  }
-}
-
-void getAres() {
-  switch (Ascale)
-  {
- 	// Possible accelerometer scales (and their register bit settings) are:
-	// 2 Gs (00), 4 Gs (01), 8 Gs (10), and 16 Gs  (11).
-        // Here's a bit of an algorith to calculate DPS/(ADC tick) based on that 2-bit value:
-    case AFS_2G:
-          aRes = 2.0/32768.0;
-          break;
-    case AFS_4G:
-          aRes = 4.0/32768.0;
-          break;
-    case AFS_8G:
-          aRes = 8.0/32768.0;
-          break;
-    case AFS_16G:
-          aRes = 16.0/32768.0;
-          break;
-  }
-}
-
 
 void readAccelData(int16_t * destination)
 {
