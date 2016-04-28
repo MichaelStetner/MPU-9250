@@ -35,11 +35,11 @@
 // Sync pulses
 //   To synchronize Arduino recordings with another recording system,
 //   emit sync pulses. When a sync pulse occurs, the SYNC_PIN goes high
-//   for SYNC_PULSE_MICROSECONDS and the Arduino prints a 1 at the end 
-//   of the line for the current sample. In samples without a sync 
-//   pulse, the Arduino prints a zero instead. Sync pulses are emitted 
-//   when the computer uses serial writes a 1. The sync pin output 
-//   should be recorded on the other data acquisition system. 
+//   for SYNC_PULSE_MICROSECONDS and the Arduino prints a 1 at the end
+//   of the line for the current sample. In samples without a sync
+//   pulse, the Arduino prints a zero instead. Sync pulses are emitted
+//   when the computer uses serial writes a 1. The sync pin output
+//   should be recorded on the other data acquisition system.
 #define SYNC_PIN 12
 #define SYNC_PULSE_MICROSECONDS 50 // duration of sync "click" pulse
 
@@ -132,7 +132,7 @@ float eInt[3] = {0.0f, 0.0f, 0.0f};       // vector to hold integral error for M
 
 
 void setup() {
-  Wire.begin();
+  i2cStart();
   Serial.begin(115200);
   Serial.println("Arduino online");
   pinMode(SYNC_PIN, OUTPUT); // to the speaker for sync pulse
@@ -832,6 +832,10 @@ void MPU9250SelfTest(float * destination) // Should return percent deviation fro
 
 }
 
+
+void i2cStart() {
+  Wire.begin();
+}
 
         // Wire.h read and write protocols
         void writeByte(uint8_t address, uint8_t subAddress, uint8_t data)
