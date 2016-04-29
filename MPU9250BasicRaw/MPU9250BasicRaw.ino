@@ -51,7 +51,7 @@
 #define DEBUGPRINT false
 #define USE_COMPASS false
 
-#include <Wire.h>
+#include "I2C.h"
 #include "Registers.h"
 
 
@@ -77,7 +77,8 @@ float   temperature;    // Stores the real internal chip temperature in degrees 
 float   SelfTest[6];    // holds results of gyro and accelerometer self test
 
 void setup() {
-  i2cStart();
+  I2c.begin();
+  I2c.timeOut(10);
   Serial.begin(115200);
   Serial.println("Arduino online");
   pinMode(SYNC_PIN, OUTPUT); // to the speaker for sync pulse
@@ -622,74 +623,32 @@ void MPU9250SelfTest(float * destination) // Should return percent deviation fro
 
 }
 
-
-void i2cStart() {
-  Wire.begin();
-}
-
-        // Wire.h read and write protocols
-        void writeByte(uint8_t address, uint8_t subAddress, uint8_t data)
-{
-	Wire.beginTransmission(address);  // Initialize the Tx buffer
-	Wire.write(subAddress);           // Put slave register address in Tx buffer
-	Wire.write(data);                 // Put data in Tx buffer
-	Wire.endTransmission();           // Send the Tx buffer
-}
-
-        uint8_t readByte(uint8_t address, uint8_t subAddress)
-{
-	uint8_t data; // `data` will store the register data
-	Wire.beginTransmission(address);         // Initialize the Tx buffer
-	Wire.write(subAddress);	                 // Put slave register address in Tx buffer
-	Wire.endTransmission();             // Send the Tx buffer, but send a restart to keep connection alive FIXME no more restart
-	Wire.requestFrom(address, (uint8_t) 1);  // Read one byte from slave register address
-	data = Wire.read();                      // Fill Rx buffer with result
-	return data;                             // Return data read from slave register
-}
-
-        void readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest)
-{
-	Wire.beginTransmission(address);   // Initialize the Tx buffer
-	Wire.write(subAddress);            // Put slave register address in Tx buffer
-	uint8_t s = Wire.endTransmission(false);       // Send the Tx buffer, but send a restart to keep connection alive
-  switch (s) {
-    case 0:
-      //success
-      break;
-    case 1:
-      //Data too long too fit in transmit buffer
-      #if DEBUGPRINT
-      Serial.println("Error in I2C: Data too long too fit in buffer");
-      #endif
-      break;
-    case 2:
-      // Received NACK on transmit of address
-      #if DEBUGPRINT
-      Serial.print("Error in I2C: Received NACK on transmit of address: 0x");
-      Serial.println(address, HEX);
-      #endif
-      break;
-    case 3:
-      // Received NACK on transmit of data
-      #if DEBUGPRINT
-      Serial.print("Error in I2C: Received NACK on transmit of data: 0x");
-      Serial.println(subAddress, HEX);
-      #endif
-      break;
-    case 4:
-      // Other error
-      #if DEBUGPRINT
-      Serial.println("Error in I2C: Unknown error");
-      #endif
-      break;
+uint8_t writeByte(uint8_t address, uint8_t subAddress, uint8_t data) {
+	uint8_t s = I2c.write(address, subAddress, data);
+  if(s != 0) {
+    I2c.end();
+    I2c.begin();
   }
+  return s;
+}
 
-	uint8_t i = 0;
-        Wire.requestFrom(address, count);  // Read bytes from slave register address
-	while (Wire.available()) {
-    #if DEBUGPRINT
-    Serial.println(i);
-    #endif
-    dest[i++] = Wire.read(); // Put read results in the Rx buffer
+uint8_t readByte(uint8_t address, uint8_t subAddress) {
+  uin8_t s = I2c.read(address, subAddress, 1); // read one byte and store it in
+                                               // I2c library's internal buffer
+  if(s == 0 && I2c.available >= 1) {
+    return I2c.receive();
+  } else { // if something went wrong, reset I2C communications
+    I2c.end();
+    I2c.begin();
+    return 0;
   }
+}
+
+uint8_t readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest) {
+  uint8_t s = I2c.read(address, subAddress, count, *dest);
+  if(s != 0) {
+    I2c.end();
+    I2c.begin();
+  }
+  return s;
 }
