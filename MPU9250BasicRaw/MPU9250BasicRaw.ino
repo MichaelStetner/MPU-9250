@@ -63,6 +63,31 @@
 #define AK8963_ADDRESS 0x0C   //  Address of magnetometer
 #endif
 
+enum Ascale {
+  AFS_2G = 0,
+  AFS_4G,
+  AFS_8G,
+  AFS_16G
+};
+
+enum Gscale {
+  GFS_250DPS = 0,
+  GFS_500DPS,
+  GFS_1000DPS,
+  GFS_2000DPS
+};
+
+enum Mscale {
+  MFS_14BITS = 0, // 0.6 mG per LSB
+  MFS_16BITS      // 0.15 mG per LSB
+};
+
+// Specify sensor full scale
+uint8_t Gscale = GFS_250DPS;
+uint8_t Ascale = AFS_2G;
+uint8_t Mscale = MFS_16BITS; // Choose either 14-bit or 16-bit magnetometer resolution
+uint8_t Mmode = 0x02;        // 2 for 8 Hz, 6 for 100 Hz continuous magnetometer data read
+
 // Pin definitions
 int intPin = 12;  // These can be changed, 2 and 3 are the Arduinos ext int pins
 int myLed = 13; // Set up pin 13 led for toggling
@@ -177,7 +202,6 @@ void loop() {
     #if DEBUGPRINT
     Serial.println("Gyro has been read");
     #endif
-    getGres();
 
     #if USE_COMPASS
     readMagData(magCount);  // Read the x/y/z adc values
@@ -633,9 +657,9 @@ uint8_t writeByte(uint8_t address, uint8_t subAddress, uint8_t data) {
 }
 
 uint8_t readByte(uint8_t address, uint8_t subAddress) {
-  uin8_t s = I2c.read(address, subAddress, 1); // read one byte and store it in
-                                               // I2c library's internal buffer
-  if(s == 0 && I2c.available >= 1) {
+  uint8_t s = I2c.read(address, subAddress, 1u); // read one byte and store it in
+                                                // I2c library's internal buffer
+  if(s == 0 && I2c.available() >= 1) {
     return I2c.receive();
   } else { // if something went wrong, reset I2C communications
     I2c.end();
@@ -645,7 +669,7 @@ uint8_t readByte(uint8_t address, uint8_t subAddress) {
 }
 
 uint8_t readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest) {
-  uint8_t s = I2c.read(address, subAddress, count, *dest);
+  uint8_t s = I2c.read(address, subAddress, count, dest);
   if(s != 0) {
     I2c.end();
     I2c.begin();
