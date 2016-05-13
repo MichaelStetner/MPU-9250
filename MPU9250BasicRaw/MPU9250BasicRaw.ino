@@ -42,6 +42,7 @@
 //   should be recorded on the other data acquisition system.
 #define SYNC_PIN 12
 #define SYNC_PULSE_MICROSECONDS 50 // duration of sync "click" pulse
+#define SYNC_FREQ 2
 
  #define SerialBinaryMode false
  // Format of serial output
@@ -254,20 +255,23 @@ void loop() {
     Serial.print(',');
     Serial.print(zeropad(0, ZERO_PADDING_MEASUREMENTS));
     #endif // USE_COMPASS
-    // Sync pulse
-    // When we receive 1 over serial, emit a pulse (duration SYNC_PULSE_MICROSECONDS) over SYNC_PIN.
-    int is_sync = 0;
-    if (Serial.available() > 0) {
-      int msg = Serial.read();
-      if (msg == 1 || msg == 49) { // 49 is ASCII code for "1"
-        digitalWrite(SYNC_PIN, HIGH);
-        delayMicroseconds(SYNC_PULSE_MICROSECONDS);
-        digitalWrite(SYNC_PIN, LOW);
-        is_sync = 1;
-      }
-    }
+    /* Sync pulse
+          These sync pulses are recorded by the NIDAQ and are used to
+          synchronize the Arduino recordings with the NIDAQ recordings. For the
+          best alignment, the sync pulses should have separated by random
+          intervals. To get (somewhat) random intervals, the sync pulses are
+          sent whenever the least significant bits of gyro x, y, and z are
+          all 1.
+    */
     Serial.print(',');
-    Serial.print(is_sync);
+    if (random(100) < SYNC_FREQ) {
+      digitalWrite(SYNC_PIN, HIGH);
+      delayMicroseconds(SYNC_PULSE_MICROSECONDS);
+      digitalWrite(SYNC_PIN, LOW);
+      Serial.print('1');
+    } else {
+      Serial.print('0');
+    }
     Serial.println("");
     #endif // SerialBinaryMode
   } else {
