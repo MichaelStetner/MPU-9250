@@ -26,6 +26,8 @@
  We are also using the 400 kHz fast I2C mode by setting the TWI_FREQ  to 400000L /twi.h utility file.
  */
 
+
+
   // Seven-bit device address is 110100 for ADO = 0 and 110101 for ADO = 1
  #define ADO 1
 
@@ -40,7 +42,7 @@
 //   pulse, the Arduino prints a zero instead. Sync pulses are emitted
 //   when the computer uses serial writes a 1. The sync pin output
 //   should be recorded on the other data acquisition system.
-#define SYNC_PIN 12
+#define SYNC_PIN 9
 #define SYNC_PULSE_MICROSECONDS 50 // duration of sync "click" pulse
 #define SYNC_FREQ 2
 
@@ -52,8 +54,17 @@
 #define DEBUGPRINT false
 #define USE_COMPASS false
 
+// SD card options
+// For the Adafruit Data Logging Shield, CHIP_SELECT_PIN should be 10.
+// On the Arduino UNO, it also uses pins 11, 12, and 13 for SPI communication.
+#define CHIP_SELECT_PIN 10
+
 #include "I2C.h"
 #include "Registers.h"
+#include <SPI.h>
+#include <SD.h>
+
+File myFile;
 
 
 // Seven-bit device address is 110100 for ADO = 0 and 110101 for ADO = 1
@@ -90,8 +101,8 @@ uint8_t Mscale = MFS_16BITS; // Choose either 14-bit or 16-bit magnetometer reso
 uint8_t Mmode = 0x02;        // 2 for 8 Hz, 6 for 100 Hz continuous magnetometer data read
 
 // Pin definitions
-int intPin = 12;  // These can be changed, 2 and 3 are the Arduinos ext int pins
-int myLed = 13; // Set up pin 13 led for toggling
+int intPin = 8;  // These can be changed, 2 and 3 are the Arduinos ext int pins
+int myLed = 7; // Set up pin 13 led for toggling
 
 int16_t accelCount[3];  // Stores the 16-bit signed accelerometer sensor output
 int16_t gyroCount[3];   // Stores the 16-bit signed gyro sensor output
@@ -107,6 +118,16 @@ void setup() {
   I2c.timeOut(10);
   Serial.begin(115200);
   Serial.println("Arduino online");
+  if (!SD.begin(CHIP_SELECT_PIN)) {
+    Serial.println("SD card initialization failed!");
+    return;
+  }
+  Serial.println("SD card initialized.");
+  myFile = SD.open("test.txt", FILE_WRITE);
+  if(!myFile) {
+    Serial.println("Failed to open file!");
+    return;
+  }
   pinMode(SYNC_PIN, OUTPUT); // to the speaker for sync pulse
 
   // Read the WHO_AM_I register, this is a good test of communication
@@ -214,46 +235,46 @@ void loop() {
     ////////////////////////////////////////////////////////////////////////////
     //----------------------- Print output -----------------------------------//
     #if SerialBinaryMode
-    Serial.write(0x24);
-    Serial.write(0x24);
-    Serial.write(0x24);
-    Serial.write(millis());
-    Serial.write(accelCount, 3);
-    Serial.write(gyroCount,  3);
+    myFile.write(0x24);
+    myFile.write(0x24);
+    myFile.write(0x24);
+    myFile.write(millis());
+    myFile.write(accelCount, 3);
+    myFile.write(gyroCount,  3);
     #if USE_COMPASS
-    Serial.write(magCount,   3);
+    myFile.write(magCount,   3);
     #endif // USE_COMPASS
     #else // SerialBinaryMode
 
-    Serial.print('!');
-    Serial.print(zeropad(millis(), ZERO_PADDING_TIMER));
-    Serial.print(',');
+    myFile.print('!');
+    myFile.print(zeropad(millis(), ZERO_PADDING_TIMER));
+    myFile.print(',');
     // Gyroscope
-    Serial.print(zeropad(gyroCount[0], ZERO_PADDING_MEASUREMENTS));
-    Serial.print(',');
-    Serial.print(zeropad(gyroCount[1], ZERO_PADDING_MEASUREMENTS));
-    Serial.print(',');
-    Serial.print(zeropad(gyroCount[2], ZERO_PADDING_MEASUREMENTS));
-    Serial.print(',');
-    Serial.print(zeropad(accelCount[0], ZERO_PADDING_MEASUREMENTS));
-    Serial.print(',');
-    Serial.print(zeropad(accelCount[1], ZERO_PADDING_MEASUREMENTS));
-    Serial.print(',');
-    Serial.print(zeropad(accelCount[2], ZERO_PADDING_MEASUREMENTS));
+    myFile.print(zeropad(gyroCount[0], ZERO_PADDING_MEASUREMENTS));
+    myFile.print(',');
+    myFile.print(zeropad(gyroCount[1], ZERO_PADDING_MEASUREMENTS));
+    myFile.print(',');
+    myFile.print(zeropad(gyroCount[2], ZERO_PADDING_MEASUREMENTS));
+    myFile.print(',');
+    myFile.print(zeropad(accelCount[0], ZERO_PADDING_MEASUREMENTS));
+    myFile.print(',');
+    myFile.print(zeropad(accelCount[1], ZERO_PADDING_MEASUREMENTS));
+    myFile.print(',');
+    myFile.print(zeropad(accelCount[2], ZERO_PADDING_MEASUREMENTS));
     #if USE_COMPASS
-    Serial.print(',');
-    Serial.print(zeropad(magCount[0], ZERO_PADDING_MEASUREMENTS));
-    Serial.print(',');
-    Serial.print(zeropad(magCount[1], ZERO_PADDING_MEASUREMENTS));
-    Serial.print(',');
-    Serial.print(zeropad(magCount[2], ZERO_PADDING_MEASUREMENTS));
+    myFile.print(',');
+    myFile.print(zeropad(magCount[0], ZERO_PADDING_MEASUREMENTS));
+    myFile.print(',');
+    myFile.print(zeropad(magCount[1], ZERO_PADDING_MEASUREMENTS));
+    myFile.print(',');
+    myFile.print(zeropad(magCount[2], ZERO_PADDING_MEASUREMENTS));
     #else // USE_COMPASS
-    Serial.print(',');
-    Serial.print(zeropad(0, ZERO_PADDING_MEASUREMENTS));
-    Serial.print(',');
-    Serial.print(zeropad(0, ZERO_PADDING_MEASUREMENTS));
-    Serial.print(',');
-    Serial.print(zeropad(0, ZERO_PADDING_MEASUREMENTS));
+    myFile.print(',');
+    myFile.print(zeropad(0, ZERO_PADDING_MEASUREMENTS));
+    myFile.print(',');
+    myFile.print(zeropad(0, ZERO_PADDING_MEASUREMENTS));
+    myFile.print(',');
+    myFile.print(zeropad(0, ZERO_PADDING_MEASUREMENTS));
     #endif // USE_COMPASS
     /* Sync pulse
           These sync pulses are recorded by the NIDAQ and are used to
@@ -263,16 +284,16 @@ void loop() {
           sent whenever the least significant bits of gyro x, y, and z are
           all 1.
     */
-    Serial.print(',');
+    myFile.print(',');
     if (random(100) < SYNC_FREQ) {
       digitalWrite(SYNC_PIN, HIGH);
       delayMicroseconds(SYNC_PULSE_MICROSECONDS);
       digitalWrite(SYNC_PIN, LOW);
-      Serial.print('1');
+      myFile.print('1');
     } else {
-      Serial.print('0');
+      myFile.print('0');
     }
-    Serial.println("");
+    myFile.println("");
     #endif // SerialBinaryMode
   } else {
     #if DEBUGPRINT
