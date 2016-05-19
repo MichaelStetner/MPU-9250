@@ -63,7 +63,7 @@ void setup() {
   initLogFile();
 
   // Print MPU-9250 configuration info to file
-  myFile.print("Beginning recording session from MPU9250_SD_barebones.ino");
+  myFile.println("flush every 20");
   // Read the WHO_AM_I register, this is a good test of communication
   byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
   if(c != 0x71) {
@@ -84,6 +84,10 @@ void loop() {
   }
   
   printLogEntry();
+  numlines++;
+  if((numlines % 20) == 0) {
+    myFile.flush();
+  }
 
   // Make a new log file if the current file is too long
   if(numlines > MAX_FILE_LINES) {
@@ -110,7 +114,7 @@ void printLogEntry() {
   }
   updateEntry(syncNow);
   myFile.println(entry);
-  myFile.flush();
+  //myFile.flush();
   //Serial.println(entry); //debug
 }
 
@@ -272,6 +276,7 @@ uint8_t initLogFile() {
     if (! SD.exists(filename)) {
       // only open a new file if it doesn't exist
       myFile = SD.open(filename, FILE_WRITE); 
+      numlines = 0;
       break;
     }
   }
