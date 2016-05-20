@@ -15,6 +15,8 @@
 #define SYNC_MICROSECONDS 30
 #define BUFFER_LINES 20 // number of lines to buffer before flushing to SD card
 
+#define DS1307_ADDRESS  0x68
+
 // MPU9250 Registers
 #define MPU9250_ADDRESS 0x69
 #define WHO_AM_I_MPU9250 0x75 // Should return 0x71
@@ -39,7 +41,6 @@
 #define INT_PIN_CFG      0x37
 #define INT_ENABLE       0x38
 
-
 File myFile;
 int16_t accelCount[3];  // Stores the 16-bit signed accelerometer sensor output
 int16_t gyroCount[3];   // Stores the 16-bit signed gyro sensor output
@@ -47,9 +48,29 @@ bool syncNow;
 unsigned long numlines = 0;
 unsigned long myrand;
 char filename[] = "GD_XXXX.LOG";
+uint8_t rtcout[7]; // output from real time clock  
 char entry[] = "!tttttttttt,Gxxxxx,Gyyyyy,Gzzzzz,Axxxxx,Ayyyyy,Azzzzz,S";
 unsigned int entrypos;
 // template log file entry. See printLogEntry() and updateEntry().
+
+uint8_t bcd2bin (uint8_t val) { return val - 6 * (val >> 4); }
+
+void dateTime(uint16_t* date, uint16_t* time) {
+  readBytes(DS1307_ADDRESS, 0, 7, &rtcout[0]); 
+  uint8_t ss = bcd2bin(rtcout[0] & 0x7F);
+  uint8_t mm = bcd2bin(rtcout[1]);
+  uint8_t hh = bcd2bin(rtcout[2]);
+  uint8_t d  = bcd2bin(rtcout[4]);
+  uint8_t m  = bcd2bin(rtcout[5]);
+  uint16_t y = bcd2bin(rtcout[6]) + 2000;
+  
+
+  // return date using FAT_DATE macro to format fields
+  *date = FAT_DATE(y, m, d);
+
+  // return time using FAT_TIME macro to format fields
+  *time = FAT_TIME(hh, mm, ss);
+}
 
 void setup() {
   Serial.begin(115200); //debug
@@ -60,6 +81,7 @@ void setup() {
   initMPU9250();
 
   // SD card for data logging
+  SdFile::dateTimeCallback(dateTime);
   if (!SD.begin(CHIP_SELECT_PIN)) {
     error("SD card initialization failed!");
     return;
@@ -67,7 +89,7 @@ void setup() {
   initLogFile();
 
   // Print MPU-9250 configuration info to file
-  myFile.println("with sync");
+  myFile.println("with timestamp");
   // Read the WHO_AM_I register, this is a good test of communication
   byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
   if(c != 0x71) {
