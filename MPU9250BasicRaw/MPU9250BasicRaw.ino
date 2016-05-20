@@ -2,15 +2,18 @@
 #include <SPI.h>
 #include <SD.h>
 
-
+// Pin assignments
+// On Arduino UNO, Pins 11, 12, 13 are used for SPI with the data logger shield
 #define CHIP_SELECT_PIN 10
 #define SYNC_PIN 9
 
-#define SYNC_RATE 0.01 // between 0 (no sync pulses) and 1 (sync pulse on every cycle)
+#define SYNC_RATE  50 // integer between 0 (no sync pulses) and 10000 (sync pulse on every cycle)
 #define GYRO_SCALE 3 // 0=250dps, 1=500dps, 2=1000dps, 3=2000dps
 #define ACCEL_SCALE 1 // 0=2g, 1=4g, 2=8g, 3=16g
 #define I2C_TIMEOUT_MS 10
 #define MAX_FILE_LINES 50000UL 
+#define SYNC_MICROSECONDS 30
+#define BUFFER_LINES 20 // number of lines to buffer before flushing to SD card
 
 // MPU9250 Registers
 #define MPU9250_ADDRESS 0x69
@@ -42,13 +45,14 @@ int16_t accelCount[3];  // Stores the 16-bit signed accelerometer sensor output
 int16_t gyroCount[3];   // Stores the 16-bit signed gyro sensor output
 bool syncNow;
 unsigned long numlines = 0;
+unsigned long myrand;
 char filename[] = "GD_XXXX.LOG";
 char entry[] = "!tttttttttt,Gxxxxx,Gyyyyy,Gzzzzz,Axxxxx,Ayyyyy,Azzzzz,S";
 unsigned int entrypos;
 // template log file entry. See printLogEntry() and updateEntry().
 
 void setup() {
-  //Serial.begin(115200); //debug
+  Serial.begin(115200); //debug
 
   // I2C (two-wire interface) for communicating with MPU-9250
   I2c.begin();
@@ -57,20 +61,20 @@ void setup() {
 
   // SD card for data logging
   if (!SD.begin(CHIP_SELECT_PIN)) {
-    //"SD card initialization failed!"
+    error("SD card initialization failed!");
     return;
   }
   initLogFile();
 
   // Print MPU-9250 configuration info to file
-  myFile.println("flush every 20");
+  myFile.println("with sync");
   // Read the WHO_AM_I register, this is a good test of communication
   byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
   if(c != 0x71) {
     error("MPU9250 did not respond correctly to who am i.");
   }
 
-  
+  pinMode(SYNC_PIN, OUTPUT);
 }
 
 void loop() {
@@ -78,14 +82,22 @@ void loop() {
   readGyroData(gyroCount);
 
   // emit sync pulses at random
-  syncNow = rand() < SYNC_RATE;
+  myrand = random(10000);
+  syncNow = (myrand < SYNC_RATE);
+  Serial.print("sync is ");
+  Serial.print(syncNow);
+  Serial.print(" (random number was ");
+  Serial.print(myrand);
+  Serial.println(")");
   if(syncNow) {
-    
+    digitalWrite(SYNC_PIN, HIGH);
+    delayMicroseconds(SYNC_MICROSECONDS);
+    digitalWrite(SYNC_PIN, LOW);
   }
   
   printLogEntry();
   numlines++;
-  if((numlines % 20) == 0) {
+  if((numlines % BUFFER_LINES) == 0) {
     myFile.flush();
   }
 
@@ -104,18 +116,15 @@ void printLogEntry() {
   entrypos++; // skip comma
   for(int i = 0; i < 3; i++) {
     updateEntry(accelCount[i]);
-    //updateEntry(int16_t(entrypos));
     entrypos++; // skip comma
   }
   for(int j = 0; j < 3; j++) {
     updateEntry(gyroCount[j]);
-    //updateEntry(int16_t(-entrypos));
     entrypos++; // skip comma
   }
   updateEntry(syncNow);
   myFile.println(entry);
-  //myFile.flush();
-  //Serial.println(entry); //debug
+  Serial.println(entry);
 }
 
 void updateEntry(int16_t y) {
@@ -133,9 +142,9 @@ void updateEntry(int16_t y) {
 
 void updateEntry(bool y) {
   if(y) {
-    entry[entrypos++] = '0';
-  } else {
     entry[entrypos++] = '1';
+  } else {
+    entry[entrypos++] = '0';
   }
 }
 
@@ -288,7 +297,7 @@ uint8_t initLogFile() {
 
 
 void error(char *msg) {
-  //Serial.println(msg);
+  Serial.println(msg);
   while(1);
 }
 
