@@ -367,6 +367,7 @@ uint8_t initLogFile() {
   myFile.print(mm);
   myFile.print(":");
   myFile.println(ss);
+  myFile.println("DATA BEGINS ON NEXT LINE");
 }
 
 
