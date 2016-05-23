@@ -51,7 +51,8 @@ char filename[] = "GD_XXXX.LOG";
 uint8_t rtcout[7]; // output from real time clock  
 char entry[] = "!tttttttttt,Gxxxxx,Gyyyyy,Gzzzzz,Axxxxx,Ayyyyy,Azzzzz,S";
 unsigned int entrypos;
-// template log file entry. See printLogEntry() and updateEntry().
+// template log file entry.
+// To change the format of the log file, you need to change this, as well as printLogEntry() and updateEntry() and initLogFile()
 
 uint8_t bcd2bin (uint8_t val) { return val - 6 * (val >> 4); }
 
@@ -137,11 +138,11 @@ void printLogEntry() {
   updateEntry(millis());
   entrypos++; // skip comma
   for(int i = 0; i < 3; i++) {
-    updateEntry(accelCount[i]);
+    updateEntry(gyroCount[i]);
     entrypos++; // skip comma
   }
   for(int j = 0; j < 3; j++) {
-    updateEntry(gyroCount[j]);
+    updateEntry(accelCount[j]);
     entrypos++; // skip comma
   }
   updateEntry(syncNow);
@@ -262,6 +263,9 @@ void initMPU9250()
 
 
 uint8_t writeByte(uint8_t address, uint8_t subAddress, uint8_t data) {
+  /*
+   * Write one byte of data to I2C slave register
+   */
   uint8_t s = I2c.write(address, subAddress, data);
   if(s != 0) { // if something went wrong, reset I2C communications
     I2c.end();
@@ -271,6 +275,9 @@ uint8_t writeByte(uint8_t address, uint8_t subAddress, uint8_t data) {
 }
 
 uint8_t readByte(uint8_t address, uint8_t subAddress) {
+  /*
+   * Read one byte of data from a register in an I2C slave device.
+   */
   uint8_t s = I2c.read(address, subAddress, 1u); // read one byte and store it in
                                                 // I2c library's internal buffer
   if(s == 0 && I2c.available() >= 1) {
@@ -283,6 +290,9 @@ uint8_t readByte(uint8_t address, uint8_t subAddress) {
 }
 
 uint8_t readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest) {
+  /*
+   * Read multiple bytes from registers on an I2C slave device. Store the data in *dest.
+   */
   uint8_t s = I2c.read(address, subAddress, count, dest);
   if(s != 0) { // if something went wrong, reset I2C communications
     I2c.end();
@@ -290,8 +300,21 @@ uint8_t readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * 
   }
   return s;
 }
-
+//34567890123456789012345678901234567890123456789012345678901234567890123456789
 uint8_t initLogFile() {
+  /*
+   * Create a new log file.
+   * 
+   * Makes a new file of the format GD_XXXX.DAT where XXXX is replaced 
+   * by a number between 0001 and 9999. It will use the lowest number 
+   * that does not already exist. 
+   * 
+   * After creating the file, write a 
+   * header. If you are changing the format of the log file you should 
+   * change the header. In particular, the "ColumnNames" field should 
+   * be changed to reflect the columns in your log file entry.
+   */
+   
   // Close the current file because we can only have one file open at a time. This is 
   // a limitation of the SD library.
   if(myFile) {
@@ -315,6 +338,35 @@ uint8_t initLogFile() {
   if (!myFile) {
     error("couldnt create file");
   }
+
+  // Read current time from real time clock so we can record file start time 
+  // in the header below.
+  readBytes(DS1307_ADDRESS, 0, 7, &rtcout[0]); 
+  uint8_t ss = bcd2bin(rtcout[0] & 0x7F);
+  uint8_t mm = bcd2bin(rtcout[1]);
+  uint8_t hh = bcd2bin(rtcout[2]);
+  uint8_t d  = bcd2bin(rtcout[4]);
+  uint8_t m  = bcd2bin(rtcout[5]);
+  uint16_t y = bcd2bin(rtcout[6]) + 2000;
+
+  // Write header
+  myFile.println("Arduino data");
+  myFile.print("BytesPerLine=");
+  myFile.println(sizeof(entry));
+  myFile.print("Columns=Milliseconds,GyroX,GyroY,GyroZ,"); // change this with 
+  myFile.println("AccelX,AccelY,AccelZ,Sync");             // entry format 
+  myFile.print("FileStartTime=");
+  myFile.print(y);
+  myFile.print("-");
+  myFile.print(m);
+  myFile.print("-");
+  myFile.print(d);
+  myFile.print(" ");
+  myFile.print(hh);
+  myFile.print(":");
+  myFile.print(mm);
+  myFile.print(":");
+  myFile.println(ss);
 }
 
 
