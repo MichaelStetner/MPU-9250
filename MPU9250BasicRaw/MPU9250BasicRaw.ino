@@ -11,7 +11,7 @@
 #define GYRO_SCALE 3 // 0=250dps, 1=500dps, 2=1000dps, 3=2000dps
 #define ACCEL_SCALE 1 // 0=2g, 1=4g, 2=8g, 3=16g
 #define I2C_TIMEOUT_MS 10
-#define MAX_FILE_LINES 50000UL 
+#define MAX_FILE_LINES 16000000UL  // 16 million lines/file * 56 bytes/line = 896MB/file
 #define SYNC_MICROSECONDS 30
 #define BUFFER_LINES 20 // number of lines to buffer before flushing to SD card
 
@@ -106,15 +106,15 @@ void loop() {
   // emit sync pulses at random
   myrand = random(10000);
   syncNow = (myrand < SYNC_RATE);
-  Serial.print("sync is ");
-  Serial.print(syncNow);
-  Serial.print(" (random number was ");
-  Serial.print(myrand);
-  Serial.println(")");
   if(syncNow) {
     digitalWrite(SYNC_PIN, HIGH);
     delayMicroseconds(SYNC_MICROSECONDS);
     digitalWrite(SYNC_PIN, LOW);
+
+      // Read the WHO_AM_I register, this is a good test of communication
+  byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
+  Serial.print("MPU9250 says: I am 0x");
+  Serial.println(c, HEX);
   }
   
   printLogEntry();
