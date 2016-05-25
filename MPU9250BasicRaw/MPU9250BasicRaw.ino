@@ -89,8 +89,7 @@ void setup() {
   }
   initLogFile();
 
-  // Print MPU-9250 configuration info to file
-  myFile.println("with timestamp");
+  
   // Read the WHO_AM_I register, this is a good test of communication
   byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
   if(c != 0x71) {
