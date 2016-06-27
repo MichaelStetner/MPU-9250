@@ -79,7 +79,6 @@ void setup() {
   // I2C (two-wire interface) for communicating with MPU-9250
   I2c.begin();
   I2c.timeOut(I2C_TIMEOUT_MS);
-  initMPU9250();
 
   // SD card for data logging
   SdFile::dateTimeCallback(dateTime);
@@ -88,8 +87,9 @@ void setup() {
     return;
   }
   initLogFile();
-
   
+  initMPU9250();
+
   // Read the WHO_AM_I register, this is a good test of communication
   byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
   if(c != 0x71) {
@@ -110,11 +110,6 @@ void loop() {
     digitalWrite(SYNC_PIN, HIGH);
     delayMicroseconds(SYNC_MICROSECONDS);
     digitalWrite(SYNC_PIN, LOW);
-
-      // Read the WHO_AM_I register, this is a good test of communication
-  byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
-  Serial.print("MPU9250 says: I am 0x");
-  Serial.println(c, HEX);
   }
   
   printLogEntry();
@@ -371,6 +366,8 @@ uint8_t initLogFile() {
 
 
 void error(char *msg) {
+  myFile.println(msg);
+  myFile.close();
   Serial.println(msg);
   while(1);
 }
