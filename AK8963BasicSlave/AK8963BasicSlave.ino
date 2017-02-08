@@ -3,7 +3,7 @@
   Read from AK8963 compass as a slave to the MPU-9250
 */
 
-#include <Wire.h>
+#include "I2C.h"
 
 #define AK8963_ADDRESS   0x0C
 #define WHO_AM_I_AK8963  0x00 // should return 0x48
@@ -19,12 +19,15 @@
 #define USER_CTRL        0x6A  // Bit 7 enable DMP, bit 3 reset DMP
 #define WHO_AM_I_MPU9250 0x75 // Should return 0x71
 
+#define I2C_TIMEOUT_MS 10
 
 void setup() {
   Serial.begin(115200);
   Serial.println("Arduino online");
 
-  Wire.begin();
+  // I2C (two-wire interface) for communicating with MPU-9250
+  I2c.begin();
+  I2c.timeOut(I2C_TIMEOUT_MS);
 
   // Read the WHO_AM_I register, this is a good test of communication
   byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
@@ -94,22 +97,31 @@ void loop(){
   delay(100);
 }
 
-        // Wire.h read and write protocols
-        void writeByte(uint8_t address, uint8_t subAddress, uint8_t data)
-{
-  Wire.beginTransmission(address);  // Initialize the Tx buffer
-  Wire.write(subAddress);           // Put slave register address in Tx buffer
-  Wire.write(data);                 // Put data in Tx buffer
-  Wire.endTransmission();           // Send the Tx buffer
+
+uint8_t writeByte(uint8_t address, uint8_t subAddress, uint8_t data) {
+  /*
+   * Write one byte of data to I2C slave register
+   */
+  uint8_t s = I2c.write(address, subAddress, data);
+  if(s != 0) { // if something went wrong, reset I2C communications
+    I2c.end();
+    I2c.begin();
+  }
+  return s;
 }
 
-        uint8_t readByte(uint8_t address, uint8_t subAddress)
-{
-  uint8_t data; // `data` will store the register data
-  Wire.beginTransmission(address);         // Initialize the Tx buffer
-  Wire.write(subAddress);                  // Put slave register address in Tx buffer
-  Wire.endTransmission();             // Send the Tx buffer, but send a restart to keep connection alive FIXME no more restart
-  Wire.requestFrom(address, (uint8_t) 1);  // Read one byte from slave register address
-  data = Wire.read();                      // Fill Rx buffer with result
-  return data;                             // Return data read from slave register
+uint8_t readByte(uint8_t address, uint8_t subAddress) {
+  /*
+   * Read one byte of data from a register in an I2C slave device.
+   */
+  uint8_t s = I2c.read(address, subAddress, 1u); // read one byte and store it in
+                                                // I2c library's internal buffer
+  if(s == 0 && I2c.available() >= 1) {
+    return I2c.receive();
+  } else { // if something went wrong, reset I2C communications
+    I2c.end();
+    I2c.begin();
+    return 0;
+  }
 }
+
