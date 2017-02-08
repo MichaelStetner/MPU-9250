@@ -83,21 +83,15 @@ void setup() {
 }
 
 void loop(){
-  // Read the WHO_AM_I register, this is a good test of communication
-  byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
-  Serial.print("MPU9250 says I AM 0x");
-  Serial.println(c, HEX);
-  delay(500);
-
   Serial.print(millis());
-  Serial.print(" External sensor says");
+  //Serial.print(" External sensor says");
   for (int regaddr=73; regaddr<=78; regaddr++) {
-    c = readByte(MPU9250_ADDRESS, regaddr);
-    Serial.print(" 0x");
-    Serial.print(c, HEX);
+    byte c = readByte(MPU9250_ADDRESS, regaddr);
+    Serial.print(',');
+    Serial.print(c, DEC);
   }
   Serial.println("");
-  delay(500);
+  delay(100);
 }
 
         // Wire.h read and write protocols
