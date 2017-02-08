@@ -261,9 +261,9 @@ void readMagData(int16_t * destination)
 {
   uint8_t rawData[6];
   readBytes(MPU9250_ADDRESS, EXT_SENS_DATA_00, 6, &rawData[0]);
-  destination[0] = ((int16_t)rawData[0] << 8) | rawData[1] ;  // Turn the MSB and LSB into a signed 16-bit value
-  destination[1] = ((int16_t)rawData[2] << 8) | rawData[3] ;
-  destination[2] = ((int16_t)rawData[4] << 8) | rawData[5] ;
+  destination[0] = ((int16_t)rawData[1] << 8) | rawData[0] ;  // Turn the MSB and LSB into a signed 16-bit value
+  destination[1] = ((int16_t)rawData[3] << 8) | rawData[2] ;
+  destination[2] = ((int16_t)rawData[5] << 8) | rawData[4] ;
 }
 
 void initMPU9250()
