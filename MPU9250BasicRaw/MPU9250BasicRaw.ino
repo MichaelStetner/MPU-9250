@@ -1,6 +1,7 @@
 #include "I2C.h"
 #include <SPI.h>
 #include <SD.h>
+#include "Registers.h"
 
 // Pin assignments
 // On Arduino UNO, Pins 11, 12, 13 are used for SPI with the data logger shield
@@ -153,44 +154,36 @@ void setup() {
   pinMode(SYNC_PIN, OUTPUT);
 }
 
+uint8_t fifo_cnt_high;
+uint8_t fifo_cnt_low;
+uint16_t fifo_cnt;
 void loop() {
-  readAccelData(accelCount);
-  readGyroData(gyroCount);
-  readMagData(magCount);
-
-  // emit sync pulses at random
-  myrand = random(10000);
-  syncNow = (myrand < SYNC_RATE);
-  if(syncNow) {
-    digitalWrite(SYNC_PIN, HIGH);
-    delayMicroseconds(SYNC_MICROSECONDS);
-    digitalWrite(SYNC_PIN, LOW);
-  }
-
-  printLogEntry();
-  numlines++;
-  if((numlines % BUFFER_LINES) == 0) {
-    myFile.flush();
-  }
-
-  // Make a new log file if the current file is too long
-  if(numlines > MAX_FILE_LINES) {
-    initLogFile();
-  }
+   fifo_cnt_high = readByte(MPU9250_ADDRESS, FIFO_COUNTH) & B00001111;
+   fifo_cnt_low = readByte(MPU9250_ADDRESS, FIFO_COUNTL);
+   fifo_cnt = ((int16_t)fifo_cnt_high << 8) | fifo_cnt_low;
+   Serial.print("FIFO count is ");
+   Serial.println(fifo_cnt);
+   if (readByte(MPU9250_ADDRESS, INT_STATUS) & B00010000) {
+    Serial.println("FIFO overflowed!");
+    writeByte(MPU9250_ADDRESS, USER_CTRL, B01000100); // Reset FIFO
+    // while(1);
+   }
+   delay(10);
 }
 
 void printLogEntry() {
-  myFile.write(millis())
-  for(int i = 0; i < 3; i++) {
-    myFile.write(gyroCount[i]);
-  }
-  for(int j = 0; j < 3; j++) {
-    myFile.write(accelCount[j]);
-  }
-  for(int k = 0; k < 3; k++) {
-    myFile.write(magCount[k]);
-  }
-  myFile.write(int16_t syncNow);
+//  myFile.write(millis());
+//  for(int i = 0; i < 3; i++) {
+//    myFile.write(gyroCount[i]);
+//  }
+//  for(int j = 0; j < 3; j++) {
+//    myFile.write(accelCount[j]);
+//  }
+//  for(int k = 0; k < 3; k++) {
+//    myFile.write(magCount[k]);
+//  }
+//  myFile.write(int16_t(syncNow));
+myFile.write(millis());
 }
 
 void readAccelData(int16_t * destination)
@@ -276,6 +269,10 @@ void initMPU9250()
   // can join the I2C bus and all can be controlled by the Arduino as master
    writeByte(MPU9250_ADDRESS, INT_PIN_CFG, 0x22);
    writeByte(MPU9250_ADDRESS, INT_ENABLE, 0x01);  // Enable data ready (bit 0) interrupt
+
+   writeByte(MPU9250_ADDRESS, USER_CTRL, B01000000); // Enable FIFO
+   writeByte(MPU9250_ADDRESS, FIFO_EN, B01000000); // Write GyroX only to FIFO
+
    delay(100);
 }
 
@@ -357,35 +354,9 @@ uint8_t initLogFile() {
     error("couldnt create file");
   }
 
-  // Read current time from real time clock so we can record file start time
-  // in the header below.
-  readBytes(DS1307_ADDRESS, 0, 7, &rtcout[0]);
-  uint8_t ss = bcd2bin(rtcout[0] & 0x7F);
-  uint8_t mm = bcd2bin(rtcout[1]);
-  uint8_t hh = bcd2bin(rtcout[2]);
-  uint8_t d  = bcd2bin(rtcout[4]);
-  uint8_t m  = bcd2bin(rtcout[5]);
-  uint16_t y = bcd2bin(rtcout[6]) + 2000;
 
-  // Write header
-  myFile.println("Arduino data");
-  myFile.print("BytesPerLine=");
-  myFile.println(sizeof(entry));
-  myFile.print("Columns=Milliseconds,GyroX,GyroY,GyroZ,"); // change this with
-  myFile.println("AccelX,AccelY,AccelZ,MagX,MagY,MagZ,Sync");             // entry format
-  myFile.print("FileStartTime=");
-  myFile.print(y);
-  myFile.print("-");
-  myFile.print(m);
-  myFile.print("-");
-  myFile.print(d);
-  myFile.print(" ");
-  myFile.print(hh);
-  myFile.print(":");
-  myFile.print(mm);
-  myFile.print(":");
-  myFile.println(ss);
-  myFile.println("DATA BEGINS ON NEXT LINE");
+
+
 }
 
 
