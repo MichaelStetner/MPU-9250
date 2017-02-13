@@ -62,7 +62,7 @@ bool syncNow;
 unsigned long numlines = 0;
 unsigned long myrand;
 char filename[] = "GD_XXXX.LOG";
-uint8_t rtcout[7]; // output from real time clock  
+uint8_t rtcout[7]; // output from real time clock
 char entry[] = "!tttttttttt,Gxxxxx,Gyyyyy,Gzzzzz,Axxxxx,Ayyyyy,Azzzzz,Mxxxxx,Myyyyy,Mzzzzz,S";
 unsigned int entrypos;
 // template log file entry.
@@ -71,14 +71,14 @@ unsigned int entrypos;
 uint8_t bcd2bin (uint8_t val) { return val - 6 * (val >> 4); }
 
 void dateTime(uint16_t* date, uint16_t* time) {
-  readBytes(DS1307_ADDRESS, 0, 7, &rtcout[0]); 
+  readBytes(DS1307_ADDRESS, 0, 7, &rtcout[0]);
   uint8_t ss = bcd2bin(rtcout[0] & 0x7F);
   uint8_t mm = bcd2bin(rtcout[1]);
   uint8_t hh = bcd2bin(rtcout[2]);
   uint8_t d  = bcd2bin(rtcout[4]);
   uint8_t m  = bcd2bin(rtcout[5]);
   uint16_t y = bcd2bin(rtcout[6]) + 2000;
-  
+
 
   // return date using FAT_DATE macro to format fields
   *date = FAT_DATE(y, m, d);
@@ -101,7 +101,7 @@ void setup() {
     return;
   }
   initLogFile();
-  
+
   initMPU9250();
 
   // Read the WHO_AM_I register, this is a good test of communication
@@ -129,7 +129,7 @@ void setup() {
   //   5    SLV_3_FIFO_EN  Write SLV_3 data to FIFO (1 to enable)
   //   4    I2C_MST_P_NSR  Behavior between reads (0 to stop, 1 to reset)
   //  3:0   I2C_MST_CLK    I2C master clock speed (B1000 for 258kHz, slowest)
-  
+
   // FIXME experiment with bit 4 - what to do between reads
 
   // Configure to read from WHO_AM_I register of AK8963
@@ -146,10 +146,9 @@ void setup() {
   //   5    I2C_SLV0_REG_DIS  "When set, the transaction does not write a register value, it will only read data, or write data"
   //   4    I2C_SLV0_GRP      Grouping of bytes into words (0 for [0 1] [2 3]...; 1 for 0 [1 2] [3 4]...)
   //  3:0   I2C_MST_CLK       Number of bytes to read (seven bytes = B0111)
-  
+
   // Enable I2C master
   writeByte(MPU9250_ADDRESS, USER_CTRL, B00100000);
-  
 
   pinMode(SYNC_PIN, OUTPUT);
 }
@@ -167,7 +166,7 @@ void loop() {
     delayMicroseconds(SYNC_MICROSECONDS);
     digitalWrite(SYNC_PIN, LOW);
   }
-  
+
   printLogEntry();
   numlines++;
   if((numlines % BUFFER_LINES) == 0) {
@@ -181,61 +180,17 @@ void loop() {
 }
 
 void printLogEntry() {
-  // log entry is like:
-  // "!1234567890,-12345, 12345,-12345, 12345,-12345, 12345, 12345,-12345, 12345,1"
-  //     millis   GyroX  GyroY  GyroZ  AccelX AccelY AccelZ  MagX   MagY   MagZ  Sync
-  entrypos = 1;
-  updateEntry(millis());
-  entrypos++; // skip comma
+  myFile.write(millis())
   for(int i = 0; i < 3; i++) {
-    updateEntry(gyroCount[i]);
-    entrypos++; // skip comma
+    myFile.write(gyroCount[i]);
   }
   for(int j = 0; j < 3; j++) {
-    updateEntry(accelCount[j]);
-    entrypos++; // skip comma
+    myFile.write(accelCount[j]);
   }
   for(int k = 0; k < 3; k++) {
-    updateEntry(magCount[k]);
-    entrypos++; // skip comma
+    myFile.write(magCount[k]);
   }
-  updateEntry(syncNow);
-  myFile.println(entry);
-  Serial.println(entry);
-}
-
-void updateEntry(int16_t y) {
-  if(y < 0) {
-    entry[entrypos++] = '-';
-  } else {
-    entry[entrypos++] = ' ';
-  }
-  entry[entrypos++] = abs(y         / 10000) + '0';
-  entry[entrypos++] = abs(y % 10000 /  1000) + '0';
-  entry[entrypos++] = abs(y %  1000 /   100) + '0';
-  entry[entrypos++] = abs(y %   100 /    10) + '0';
-  entry[entrypos++] = abs(y %    10        ) + '0';
-}
-
-void updateEntry(bool y) {
-  if(y) {
-    entry[entrypos++] = '1';
-  } else {
-    entry[entrypos++] = '0';
-  }
-}
-
-void updateEntry(unsigned long y) {
-  entry[entrypos++] = y                / 1000000000UL + '0';
-  entry[entrypos++] = y % 1000000000UL /  100000000UL + '0';
-  entry[entrypos++] = y %  100000000UL /   10000000UL + '0';
-  entry[entrypos++] = y %   10000000UL /    1000000UL + '0';
-  entry[entrypos++] = y %    1000000UL /     100000UL + '0';
-  entry[entrypos++] = y %     100000UL /      10000UL + '0';
-  entry[entrypos++] = y %      10000UL /       1000UL + '0';
-  entry[entrypos++] = y %       1000UL /        100UL + '0';
-  entry[entrypos++] = y %        100UL /         10UL + '0';
-  entry[entrypos++] = y %         10UL                + '0';
+  myFile.write(int16_t syncNow);
 }
 
 void readAccelData(int16_t * destination)
@@ -367,18 +322,18 @@ uint8_t readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * 
 uint8_t initLogFile() {
   /*
    * Create a new log file.
-   * 
-   * Makes a new file of the format GD_XXXX.DAT where XXXX is replaced 
-   * by a number between 0001 and 9999. It will use the lowest number 
-   * that does not already exist. 
-   * 
-   * After creating the file, write a 
-   * header. If you are changing the format of the log file you should 
-   * change the header. In particular, the "ColumnNames" field should 
+   *
+   * Makes a new file of the format GD_XXXX.DAT where XXXX is replaced
+   * by a number between 0001 and 9999. It will use the lowest number
+   * that does not already exist.
+   *
+   * After creating the file, write a
+   * header. If you are changing the format of the log file you should
+   * change the header. In particular, the "ColumnNames" field should
    * be changed to reflect the columns in your log file entry.
    */
-   
-  // Close the current file because we can only have one file open at a time. This is 
+
+  // Close the current file because we can only have one file open at a time. This is
   // a limitation of the SD library.
   if(myFile) {
     myFile.close();
@@ -392,19 +347,19 @@ uint8_t initLogFile() {
     filename[6] = xxxx %   10        + '0';
     if (! SD.exists(filename)) {
       // only open a new file if it doesn't exist
-      myFile = SD.open(filename, FILE_WRITE); 
+      myFile = SD.open(filename, FILE_WRITE);
       numlines = 0;
       break;
     }
   }
-  
+
   if (!myFile) {
     error("couldnt create file");
   }
 
-  // Read current time from real time clock so we can record file start time 
+  // Read current time from real time clock so we can record file start time
   // in the header below.
-  readBytes(DS1307_ADDRESS, 0, 7, &rtcout[0]); 
+  readBytes(DS1307_ADDRESS, 0, 7, &rtcout[0]);
   uint8_t ss = bcd2bin(rtcout[0] & 0x7F);
   uint8_t mm = bcd2bin(rtcout[1]);
   uint8_t hh = bcd2bin(rtcout[2]);
@@ -416,8 +371,8 @@ uint8_t initLogFile() {
   myFile.println("Arduino data");
   myFile.print("BytesPerLine=");
   myFile.println(sizeof(entry));
-  myFile.print("Columns=Milliseconds,GyroX,GyroY,GyroZ,"); // change this with 
-  myFile.println("AccelX,AccelY,AccelZ,MagX,MagY,MagZ,Sync");             // entry format 
+  myFile.print("Columns=Milliseconds,GyroX,GyroY,GyroZ,"); // change this with
+  myFile.println("AccelX,AccelY,AccelZ,MagX,MagY,MagZ,Sync");             // entry format
   myFile.print("FileStartTime=");
   myFile.print(y);
   myFile.print("-");
@@ -440,4 +395,3 @@ void error(char *msg) {
   Serial.println(msg);
   while(1);
 }
-
