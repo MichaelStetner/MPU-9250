@@ -13,10 +13,11 @@
 #define ACCEL_SCALE 1 // 0=2g, 1=4g, 2=8g, 3=16g
 #define I2C_TIMEOUT_MS 10
 #define SYNC_MICROSECONDS 30
-#define BYTES_PER_DATA_SAMPLE 18 // 9 readings * 2 bytes per reading
+#define BYTES_PER_DATA_SAMPLE 2 // 1 readings * 2 bytes per reading
 #define FIFO_POLLING_INTERVAL 20 // milliseconds
 
 #define DS1307_ADDRESS  0x68
+
 
 // MPU9250 Registers
 #define MPU9250_ADDRESS 0x69
@@ -150,6 +151,7 @@ void setup() {
 
   pinMode(SYNC_PIN, OUTPUT);
 
+
   Serial.print("FIFO block size is ");
   Serial.println(FIFO_BLOCK_SIZE);
   Serial.print("Data length is ");
@@ -159,7 +161,16 @@ void setup() {
 
 void loop() {
   while (getFifoCount() < FIFO_BLOCK_SIZE) delay(FIFO_POLLING_INTERVAL);
-  readBytes(MPU9250_ADDRESS, FIFO_R_W, FIFO_BLOCK_SIZE, &data[0]);
+  int st = readBytes(MPU9250_ADDRESS, FIFO_R_W, FIFO_BLOCK_SIZE, &data[0]);
+  Serial.print("Status after reading: ");
+  Serial.println(st);
+
+  // DEBUG
+//  for (int i = 0; i < FIFO_BLOCK_SIZE; i++) {
+//    data[i] = i;
+//  }
+  // DEBUG
+  
   if (doSyncNow()) {
     emitSyncPulse();
     syncPulseEmitted = 1;
@@ -181,7 +192,11 @@ uint16_t getFifoCount() {
   // Number of bytes in the MPU9250's FIFO
   uint8_t fifo_cnt_high = readByte(MPU9250_ADDRESS, FIFO_COUNTH) & B00001111;
   uint8_t fifo_cnt_low = readByte(MPU9250_ADDRESS, FIFO_COUNTL);
-  return ((int16_t)fifo_cnt_high << 8) | fifo_cnt_low;
+  uint16_t count = ((int16_t)fifo_cnt_high << 8) | fifo_cnt_low;
+  Serial.print("fifo count is ");
+  Serial.println(count);
+  return count;
+  
 }
 
 
@@ -256,7 +271,7 @@ void initMPU9250()
    writeByte(MPU9250_ADDRESS, INT_ENABLE, 0x01);  // Enable data ready (bit 0) interrupt
 
    writeByte(MPU9250_ADDRESS, USER_CTRL, B01000000); // Enable FIFO
-   writeByte(MPU9250_ADDRESS, FIFO_EN, B01000000); // Write GyroX only to FIFO
+   writeByte(MPU9250_ADDRESS, FIFO_EN, B01000000); // Write GyroX to FIFO
 
    delay(100);
 }
@@ -330,6 +345,8 @@ uint8_t initLogFile() {
     if (! SD.exists(filename)) {
       // only open a new file if it doesn't exist
       myFile = SD.open(filename, FILE_WRITE);
+      myFile.write(DATA_LEN);
+      
       break;
     }
   }
