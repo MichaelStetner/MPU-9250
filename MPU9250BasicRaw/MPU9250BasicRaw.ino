@@ -12,9 +12,9 @@
 #define GYRO_SCALE 3 // 0=250dps, 1=500dps, 2=1000dps, 3=2000dps
 #define ACCEL_SCALE 1 // 0=2g, 1=4g, 2=8g, 3=16g
 #define I2C_TIMEOUT_MS 10
-#define MAX_FILE_LINES 16000000UL  // 16 million lines/file * 56 bytes/line = 896MB/file
 #define SYNC_MICROSECONDS 30
-#define BUFFER_LINES 20 // number of lines to buffer before flushing to SD card
+#define BYTES_PER_DATA_SAMPLE 18 // 9 readings * 2 bytes per reading
+#define FIFO_POLLING_INTERVAL 20 // milliseconds
 
 #define DS1307_ADDRESS  0x68
 
@@ -56,18 +56,15 @@
 #define USER_CTRL        0x6A  // Bit 7 enable DMP, bit 3 reset DMP
 
 File myFile;
-int16_t accelCount[3];  // Stores the 16-bit signed accelerometer sensor output
-int16_t gyroCount[3];   // Stores the 16-bit signed gyro sensor output
-int16_t magCount[3];    // Stores the 16-bit signed magnetometer sensor output
-bool syncNow;
-unsigned long numlines = 0;
-unsigned long myrand;
 char filename[] = "GD_XXXX.LOG";
 uint8_t rtcout[7]; // output from real time clock
-char entry[] = "!tttttttttt,Gxxxxx,Gyyyyy,Gzzzzz,Axxxxx,Ayyyyy,Azzzzz,Mxxxxx,Myyyyy,Mzzzzz,S";
-unsigned int entrypos;
-// template log file entry.
-// To change the format of the log file, you need to change this, as well as printLogEntry() and updateEntry() and initLogFile()
+const int SAMPLES_PER_BLOCK = 251 / BYTES_PER_DATA_SAMPLE;
+const int FIFO_BLOCK_SIZE = SAMPLES_PER_BLOCK * BYTES_PER_DATA_SAMPLE;
+const int DATA_LEN = FIFO_BLOCK_SIZE + 5; // DATA_LEN is maxiumum 256
+uint8_t data[DATA_LEN];
+uint8_t syncPulseEmitted;
+unsigned long ms;
+
 
 uint8_t bcd2bin (uint8_t val) { return val - 6 * (val >> 4); }
 
@@ -154,65 +151,47 @@ void setup() {
   pinMode(SYNC_PIN, OUTPUT);
 }
 
-uint8_t fifo_cnt_high;
-uint8_t fifo_cnt_low;
-uint16_t fifo_cnt;
+
 void loop() {
-   fifo_cnt_high = readByte(MPU9250_ADDRESS, FIFO_COUNTH) & B00001111;
-   fifo_cnt_low = readByte(MPU9250_ADDRESS, FIFO_COUNTL);
-   fifo_cnt = ((int16_t)fifo_cnt_high << 8) | fifo_cnt_low;
-   Serial.print("FIFO count is ");
-   Serial.println(fifo_cnt);
-   if (readByte(MPU9250_ADDRESS, INT_STATUS) & B00010000) {
-    Serial.println("FIFO overflowed!");
-    writeByte(MPU9250_ADDRESS, USER_CTRL, B01000100); // Reset FIFO
-    // while(1);
-   }
-   delay(10);
-}
-
-void printLogEntry() {
-//  myFile.write(millis());
-//  for(int i = 0; i < 3; i++) {
-//    myFile.write(gyroCount[i]);
-//  }
-//  for(int j = 0; j < 3; j++) {
-//    myFile.write(accelCount[j]);
-//  }
-//  for(int k = 0; k < 3; k++) {
-//    myFile.write(magCount[k]);
-//  }
-//  myFile.write(int16_t(syncNow));
-myFile.write(millis());
-}
-
-void readAccelData(int16_t * destination)
-{
-  uint8_t rawData[6];  // x/y/z accel register data stored here
-  readBytes(MPU9250_ADDRESS, ACCEL_XOUT_H, 6, &rawData[0]);  // Read the six raw data registers into data array
-  destination[0] = ((int16_t)rawData[0] << 8) | rawData[1] ;  // Turn the MSB and LSB into a signed 16-bit value
-  destination[1] = ((int16_t)rawData[2] << 8) | rawData[3] ;
-  destination[2] = ((int16_t)rawData[4] << 8) | rawData[5] ;
+  while (getFifoCount() < FIFO_BLOCK_SIZE) delay(FIFO_POLLING_INTERVAL);
+  readBytes(MPU9250_ADDRESS, FIFO_R_W, FIFO_BLOCK_SIZE, &data[0]);
+  if (doSyncNow()) {
+    emitSyncPulse();
+    syncPulseEmitted = 1;
+  } else {
+    syncPulseEmitted = 0;
+  }
+  ms = millis();
+  data[DATA_LEN - 5] = syncPulseEmitted
+  data[DATA_LEN - 4] = (byte) ms;
+  data[DATA_LEN - 3] = (byte) ms >> 8;
+  data[DATA_LEN - 2] = (byte) ms >> 16;
+  data[DATA_LEN - 1] = (byte) ms >> 24;
+  myFile.write(&data[0], DATA_LEN);
 }
 
 
-void readGyroData(int16_t * destination)
-{
-  uint8_t rawData[6];  // x/y/z gyro register data stored here
-  readBytes(MPU9250_ADDRESS, GYRO_XOUT_H, 6, &rawData[0]);  // Read the six raw data registers sequentially into data array
-  destination[0] = ((int16_t)rawData[0] << 8) | rawData[1] ;  // Turn the MSB and LSB into a signed 16-bit value
-  destination[1] = ((int16_t)rawData[2] << 8) | rawData[3] ;
-  destination[2] = ((int16_t)rawData[4] << 8) | rawData[5] ;
+uint16_t getFifoCount() {
+  // Number of bytes in the MPU9250's FIFO
+  uint8_t fifo_cnt_high = readByte(MPU9250_ADDRESS, FIFO_COUNTH) & B00001111;
+  uint8_t fifo_cnt_low = readByte(MPU9250_ADDRESS, FIFO_COUNTL);
+  return ((int16_t)fifo_cnt_high << 8) | fifo_cnt_low;
 }
 
-void readMagData(int16_t * destination)
-{
-  uint8_t rawData[6];
-  readBytes(MPU9250_ADDRESS, EXT_SENS_DATA_00, 6, &rawData[0]);
-  destination[0] = ((int16_t)rawData[1] << 8) | rawData[0] ;  // Turn the MSB and LSB into a signed 16-bit value
-  destination[1] = ((int16_t)rawData[3] << 8) | rawData[2] ;
-  destination[2] = ((int16_t)rawData[5] << 8) | rawData[4] ;
+
+bool doSyncNow() {
+  // Returns true if should emit a sync pulse now
+  return random(10000) < SYNC_RATE
 }
+
+
+void emitSyncPulse() {
+  // Emits a logical high for SYNC_MICROSECONDS on SYNC_PIN
+  digitalWrite(SYNC_PIN, HIGH);
+  delayMicroseconds(SYNC_MICROSECONDS);
+  digitalWrite(SYNC_PIN, LOW);
+}
+
 
 void initMPU9250()
 {
@@ -353,10 +332,6 @@ uint8_t initLogFile() {
   if (!myFile) {
     error("couldnt create file");
   }
-
-
-
-
 }
 
 
