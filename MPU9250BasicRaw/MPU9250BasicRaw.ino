@@ -149,6 +149,11 @@ void setup() {
   writeByte(MPU9250_ADDRESS, USER_CTRL, B00100000);
 
   pinMode(SYNC_PIN, OUTPUT);
+
+  Serial.print("FIFO block size is ");
+  Serial.println(FIFO_BLOCK_SIZE);
+  Serial.print("Data length is ");
+  Serial.println(DATA_LEN);
 }
 
 
@@ -162,12 +167,13 @@ void loop() {
     syncPulseEmitted = 0;
   }
   ms = millis();
-  data[DATA_LEN - 5] = syncPulseEmitted
+  data[DATA_LEN - 5] = syncPulseEmitted;
   data[DATA_LEN - 4] = (byte) ms;
-  data[DATA_LEN - 3] = (byte) ms >> 8;
-  data[DATA_LEN - 2] = (byte) ms >> 16;
-  data[DATA_LEN - 1] = (byte) ms >> 24;
+  data[DATA_LEN - 3] = (byte) (ms >> 8);
+  data[DATA_LEN - 2] = (byte) (ms >> 16);
+  data[DATA_LEN - 1] = (byte) (ms >> 24);
   myFile.write(&data[0], DATA_LEN);
+  myFile.flush();
 }
 
 
@@ -181,7 +187,7 @@ uint16_t getFifoCount() {
 
 bool doSyncNow() {
   // Returns true if should emit a sync pulse now
-  return random(10000) < SYNC_RATE
+  return random(10000) < SYNC_RATE;
 }
 
 
@@ -324,7 +330,6 @@ uint8_t initLogFile() {
     if (! SD.exists(filename)) {
       // only open a new file if it doesn't exist
       myFile = SD.open(filename, FILE_WRITE);
-      numlines = 0;
       break;
     }
   }
@@ -335,7 +340,7 @@ uint8_t initLogFile() {
 }
 
 
-void error(char *msg) {
+void error(const char *msg) {
   myFile.println(msg);
   myFile.close();
   Serial.println(msg);
