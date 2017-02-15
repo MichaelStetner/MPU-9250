@@ -32,7 +32,7 @@ MinimumSerial MinSerial;
 #define ABORT_ON_OVERRUN 1
 //------------------------------------------------------------------------------
 //Interval between data records in microseconds.
-const uint32_t LOG_INTERVAL_USEC = 3500;
+const uint32_t LOG_INTERVAL_USEC = 3333;
 //------------------------------------------------------------------------------
 // Set USE_SHARED_SPI non-zero for use of an SPI sensor.
 // May not work for some cards.
