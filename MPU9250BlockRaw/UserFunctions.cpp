@@ -21,13 +21,22 @@ uint8_t readByte(uint8_t address, uint8_t subAddress) {
   }
 }
 
+uint8_t readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * dest) {
+  /*
+   * Read multiple bytes from registers on an I2C slave device. Store the data in *dest.
+   */
+  uint8_t s = I2c.read(address, subAddress, count, dest);
+  if(s != 0) { // if something went wrong, reset I2C communications
+    I2c.end();
+    I2c.begin();
+  }
+  return s;
+}
+
 // Acquire a data record.
 void acquireData(data_t* data) {
   data->time = micros();
-  for (int i = 0; i < ADC_DIM; i++) {
-    byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
-    data->adc[i] = c;
-  }
+  readBytes(MPU9250_ADDRESS, ACCEL_XOUT_H, ADC_DIM, &data->adc[0]);
 }
 
 // Sensor setup
