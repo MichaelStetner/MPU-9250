@@ -13,6 +13,8 @@
  *
  * Data is written to the file using a SD multiple block write command.
  */
+#include "Registers.h"
+
 #include <SPI.h>
 #include "SdFat.h"
 #include "FreeStack.h"
@@ -30,7 +32,7 @@ MinimumSerial MinSerial;
 #define ABORT_ON_OVERRUN 1
 //------------------------------------------------------------------------------
 //Interval between data records in microseconds.
-const uint32_t LOG_INTERVAL_USEC = 2000;
+const uint32_t LOG_INTERVAL_USEC = 5000;
 //------------------------------------------------------------------------------
 // Set USE_SHARED_SPI non-zero for use of an SPI sensor.
 // May not work for some cards.

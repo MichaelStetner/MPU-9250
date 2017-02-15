@@ -3,7 +3,7 @@
 #include "Arduino.h"
 // User data types.  Modify for your data items.
 #define FILE_BASE_NAME "adc4pin"
-const uint8_t ADC_DIM = 4;
+const uint8_t ADC_DIM = 9;
 struct data_t {
   uint32_t time;
   uint16_t adc[ADC_DIM];
