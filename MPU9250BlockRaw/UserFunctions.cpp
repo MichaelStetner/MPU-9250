@@ -1,10 +1,14 @@
 #include "UserTypes.h"
 #include "Registers.h"
 #include "I2C.h"
+
+#define SYNC_PIN 9
+#define SYNC_RATE  50 // integer between 0 (no sync pulses) and 10000 (sync pulse on every cycle)
+#define SYNC_MICROSECONDS 30
+
 // User data functions.  Modify these functions for your data items.
 
-// Start time for data
-static uint32_t startMicros;
+unsigned long myrand;
 
 uint8_t readByte(uint8_t address, uint8_t subAddress) {
   /*
@@ -37,6 +41,16 @@ uint8_t readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * 
 void acquireData(data_t* data) {
   data->time = millis();
   readBytes(MPU9250_ADDRESS, ACCEL_XOUT_H, ADC_DIM, &data->adc[0]);
+
+  // Emit sync pulses at random
+  myrand = random(10000);
+  syncNow = (myrand < SYNC_RATE);
+  if(syncNow) {
+    digitalWrite(SYNC_PIN, HIGH);
+    delayMicroseconds(SYNC_MICROSECONDS);
+    digitalWrite(SYNC_PIN, LOW);
+  }
+  adc[20] = syncNow
 }
 
 // Sensor setup
@@ -48,4 +62,6 @@ void userSetup() {
   if(c != 0x71) {
     Serial.println("MPU9250 did not respond correctly to who am i.");
   }
+
+  pinMode(SYNC_PIN, OUTPUT);
 }
