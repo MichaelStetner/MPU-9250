@@ -6,9 +6,26 @@
 #define SYNC_RATE  50 // integer between 0 (no sync pulses) and 10000 (sync pulse on every cycle)
 #define SYNC_MICROSECONDS 30
 
+#define GYRO_SCALE 3 // 0=250dps, 1=500dps, 2=1000dps, 3=2000dps
+#define ACCEL_SCALE 1 // 0=2g, 1=4g, 2=8g, 3=16g
+
+
 // User data functions.  Modify these functions for your data items.
 
 unsigned long myrand;
+uint8_t syncNow;
+
+uint8_t writeByte(uint8_t address, uint8_t subAddress, uint8_t data) {
+  /*
+   * Write one byte of data to I2C slave register
+   */
+  uint8_t s = I2c.write(address, subAddress, data);
+  if(s != 0) { // if something went wrong, reset I2C communications
+    I2c.end();
+    I2c.begin();
+  }
+  return s;
+}
 
 uint8_t readByte(uint8_t address, uint8_t subAddress) {
   /*
@@ -37,6 +54,66 @@ uint8_t readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * 
   return s;
 }
 
+
+void initMPU9250()
+{
+ // wake up device
+  writeByte(MPU9250_ADDRESS, PWR_MGMT_1, 0x00); // Clear sleep mode bit (6), enable all sensors
+  delay(100); // Wait for all registers to reset
+
+ // get stable time source
+  writeByte(MPU9250_ADDRESS, PWR_MGMT_1, 0x01);  // Auto select clock source to be PLL gyroscope reference if ready else
+  delay(200);
+
+ // Configure Gyro and Thermometer
+ // Disable FSYNC and set thermometer and gyro bandwidth to 41 and 42 Hz, respectively;
+ // minimum delay time for this setting is 5.9 ms, which means sensor fusion update rates cannot
+ // be higher than 1 / 0.0059 = 170 Hz
+ // DLPF_CFG = bits 2:0 = 011; this limits the sample rate to 1000 Hz for both
+ // With the MPU9250, it is possible to get gyro sample rates of 32 kHz (!), 8 kHz, or 1 kHz
+  writeByte(MPU9250_ADDRESS, CONFIG, 0x03);
+
+ // Set sample rate = gyroscope output rate/(1 + SMPLRT_DIV)
+  writeByte(MPU9250_ADDRESS, SMPLRT_DIV, 0x04);  // Use a 200 Hz rate; a rate consistent with the filter update rate
+                                    // determined inset in CONFIG above
+
+ // Set gyroscope full scale range
+ // Range selects FS_SEL and AFS_SEL are 0 - 3, so 2-bit values are left-shifted into positions 4:3
+  uint8_t c = readByte(MPU9250_ADDRESS, GYRO_CONFIG); // get current GYRO_CONFIG register value
+ // c = c & ~0xE0; // Clear self-test bits [7:5]
+  c = c & ~0x02; // Clear Fchoice bits [1:0]
+  c = c & ~0x18; // Clear AFS bits [4:3]
+  c = c | GYRO_SCALE << 3; // Set full scale range for the gyro (3 for 2000 dps)
+ // c =| 0x00; // Set Fchoice for the gyro to 11 by writing its inverse to bits 1:0 of GYRO_CONFIG
+  writeByte(MPU9250_ADDRESS, GYRO_CONFIG, c ); // Write new GYRO_CONFIG value to register
+
+ // Set accelerometer full-scale range configuration
+  c = readByte(MPU9250_ADDRESS, ACCEL_CONFIG); // get current ACCEL_CONFIG register value
+ // c = c & ~0xE0; // Clear self-test bits [7:5]
+  c = c & ~0x18;  // Clear AFS bits [4:3]
+  c = c | ACCEL_SCALE << 3; // Set full scale range for the accelerometer (1 for 4g)
+  writeByte(MPU9250_ADDRESS, ACCEL_CONFIG, c); // Write new ACCEL_CONFIG register value
+
+ // Set accelerometer sample rate configuration
+ // It is possible to get a 4 kHz sample rate from the accelerometer by choosing 1 for
+ // accel_fchoice_b bit [3]; in this case the bandwidth is 1.13 kHz
+  c = readByte(MPU9250_ADDRESS, ACCEL_CONFIG2); // get current ACCEL_CONFIG2 register value
+  c = c & ~0x0F; // Clear accel_fchoice_b (bit 3) and A_DLPFG (bits [2:0])
+  c = c | 0x03;  // Set accelerometer rate to 1 kHz and bandwidth to 41 Hz
+  writeByte(MPU9250_ADDRESS, ACCEL_CONFIG2, c); // Write new ACCEL_CONFIG2 register value
+ // The accelerometer, gyro, and thermometer are set to 1 kHz sample rates,
+ // but all these rates are further reduced by a factor of 5 to 200 Hz because of the SMPLRT_DIV setting
+
+  // Configure Interrupts and Bypass Enable
+  // Set interrupt pin active high, push-pull, hold interrupt pin level HIGH until interrupt cleared,
+  // clear on read of INT_STATUS, and enable I2C_BYPASS_EN so additional chips
+  // can join the I2C bus and all can be controlled by the Arduino as master
+   writeByte(MPU9250_ADDRESS, INT_PIN_CFG, 0x22);
+   writeByte(MPU9250_ADDRESS, INT_ENABLE, 0x01);  // Enable data ready (bit 0) interrupt
+   delay(100);
+}
+
+
 // Acquire a data record.
 void acquireData(data_t* data) {
   data->time = millis();
@@ -50,7 +127,7 @@ void acquireData(data_t* data) {
     delayMicroseconds(SYNC_MICROSECONDS);
     digitalWrite(SYNC_PIN, LOW);
   }
-  adc[20] = syncNow
+  data->adc[20] = syncNow;
 }
 
 // Sensor setup
@@ -110,62 +187,4 @@ void userSetup() {
 
 
   pinMode(SYNC_PIN, OUTPUT);
-}
-
-void initMPU9250()
-{
- // wake up device
-  writeByte(MPU9250_ADDRESS, PWR_MGMT_1, 0x00); // Clear sleep mode bit (6), enable all sensors
-  delay(100); // Wait for all registers to reset
-
- // get stable time source
-  writeByte(MPU9250_ADDRESS, PWR_MGMT_1, 0x01);  // Auto select clock source to be PLL gyroscope reference if ready else
-  delay(200);
-
- // Configure Gyro and Thermometer
- // Disable FSYNC and set thermometer and gyro bandwidth to 41 and 42 Hz, respectively;
- // minimum delay time for this setting is 5.9 ms, which means sensor fusion update rates cannot
- // be higher than 1 / 0.0059 = 170 Hz
- // DLPF_CFG = bits 2:0 = 011; this limits the sample rate to 1000 Hz for both
- // With the MPU9250, it is possible to get gyro sample rates of 32 kHz (!), 8 kHz, or 1 kHz
-  writeByte(MPU9250_ADDRESS, CONFIG, 0x03);
-
- // Set sample rate = gyroscope output rate/(1 + SMPLRT_DIV)
-  writeByte(MPU9250_ADDRESS, SMPLRT_DIV, 0x04);  // Use a 200 Hz rate; a rate consistent with the filter update rate
-                                    // determined inset in CONFIG above
-
- // Set gyroscope full scale range
- // Range selects FS_SEL and AFS_SEL are 0 - 3, so 2-bit values are left-shifted into positions 4:3
-  uint8_t c = readByte(MPU9250_ADDRESS, GYRO_CONFIG); // get current GYRO_CONFIG register value
- // c = c & ~0xE0; // Clear self-test bits [7:5]
-  c = c & ~0x02; // Clear Fchoice bits [1:0]
-  c = c & ~0x18; // Clear AFS bits [4:3]
-  c = c | GYRO_SCALE << 3; // Set full scale range for the gyro (3 for 2000 dps)
- // c =| 0x00; // Set Fchoice for the gyro to 11 by writing its inverse to bits 1:0 of GYRO_CONFIG
-  writeByte(MPU9250_ADDRESS, GYRO_CONFIG, c ); // Write new GYRO_CONFIG value to register
-
- // Set accelerometer full-scale range configuration
-  c = readByte(MPU9250_ADDRESS, ACCEL_CONFIG); // get current ACCEL_CONFIG register value
- // c = c & ~0xE0; // Clear self-test bits [7:5]
-  c = c & ~0x18;  // Clear AFS bits [4:3]
-  c = c | ACCEL_SCALE << 3; // Set full scale range for the accelerometer (1 for 4g)
-  writeByte(MPU9250_ADDRESS, ACCEL_CONFIG, c); // Write new ACCEL_CONFIG register value
-
- // Set accelerometer sample rate configuration
- // It is possible to get a 4 kHz sample rate from the accelerometer by choosing 1 for
- // accel_fchoice_b bit [3]; in this case the bandwidth is 1.13 kHz
-  c = readByte(MPU9250_ADDRESS, ACCEL_CONFIG2); // get current ACCEL_CONFIG2 register value
-  c = c & ~0x0F; // Clear accel_fchoice_b (bit 3) and A_DLPFG (bits [2:0])
-  c = c | 0x03;  // Set accelerometer rate to 1 kHz and bandwidth to 41 Hz
-  writeByte(MPU9250_ADDRESS, ACCEL_CONFIG2, c); // Write new ACCEL_CONFIG2 register value
- // The accelerometer, gyro, and thermometer are set to 1 kHz sample rates,
- // but all these rates are further reduced by a factor of 5 to 200 Hz because of the SMPLRT_DIV setting
-
-  // Configure Interrupts and Bypass Enable
-  // Set interrupt pin active high, push-pull, hold interrupt pin level HIGH until interrupt cleared,
-  // clear on read of INT_STATUS, and enable I2C_BYPASS_EN so additional chips
-  // can join the I2C bus and all can be controlled by the Arduino as master
-   writeByte(MPU9250_ADDRESS, INT_PIN_CFG, 0x22);
-   writeByte(MPU9250_ADDRESS, INT_ENABLE, 0x01);  // Enable data ready (bit 0) interrupt
-   delay(100);
 }
