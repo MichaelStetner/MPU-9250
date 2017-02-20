@@ -12,4 +12,5 @@ void acquireData(data_t* data);
 void printData(Print* pr, data_t* data);
 void printHeader(Print* pr);
 void userSetup();
+uint8_t getI2cErrorCount();
 #endif  // UserTypes_h

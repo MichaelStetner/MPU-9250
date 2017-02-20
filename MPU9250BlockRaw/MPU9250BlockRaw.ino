@@ -214,7 +214,7 @@ void recordBinFile() {
   while(1) {
      // Time for next data record.
     logTime += LOG_INTERVAL_USEC;
-    if (Serial.available()) {
+    if (Serial.available() || getI2cErrorCount() > 100) {
       closeFile = true;
     }  
     if (closeFile) {
@@ -235,7 +235,8 @@ void recordBinFile() {
         overrun = 0;
       }
       if ((int32_t)(logTime - micros()) < 0) {
-        error("Rate too fast");             
+        closeFile = true;
+        Serial.println("Rate too fast");
       }
       int32_t delta;
       do {

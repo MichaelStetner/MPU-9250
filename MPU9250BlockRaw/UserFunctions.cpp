@@ -14,6 +14,11 @@
 
 unsigned long myrand;
 uint8_t syncNow;
+uint8_t i2cErrorCount = 0;
+
+uint8_t getI2cErrorCount() {
+  return i2cErrorCount;
+}
 
 uint8_t writeByte(uint8_t address, uint8_t subAddress, uint8_t data) {
   /*
@@ -50,6 +55,7 @@ uint8_t readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * 
   if(s != 0) { // if something went wrong, reset I2C communications
     I2c.end();
     I2c.begin();
+    i2cErrorCount++;
   }
   return s;
 }
