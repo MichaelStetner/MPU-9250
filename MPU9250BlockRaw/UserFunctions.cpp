@@ -35,7 +35,7 @@ uint8_t readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * 
 
 // Acquire a data record.
 void acquireData(data_t* data) {
-  data->time = micros();
+  data->time = millis();
   readBytes(MPU9250_ADDRESS, ACCEL_XOUT_H, ADC_DIM, &data->adc[0]);
 }
 
@@ -49,5 +49,3 @@ void userSetup() {
     Serial.println("MPU9250 did not respond correctly to who am i.");
   }
 }
-
-
