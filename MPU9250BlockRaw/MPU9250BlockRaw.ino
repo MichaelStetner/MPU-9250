@@ -61,6 +61,11 @@ const int8_t ERROR_LED_PIN = -1;
 // This file is flash erased using special SD commands.  The file will be
 // truncated if logging is stopped early.
 const uint32_t FILE_BLOCK_COUNT = 256000;
+//
+// log file base name if not defined in UserTypes.h
+#ifndef FILE_BASE_NAME
+#define FILE_BASE_NAME "data"
+#endif  // FILE_BASE_NAME
 //------------------------------------------------------------------------------
 // Buffer definitions.
 //
@@ -89,6 +94,11 @@ const uint8_t BUFFER_BLOCK_COUNT = 12;
 //==============================================================================
 // End of configuration constants.
 //==============================================================================
+
+// Size of file base name.
+const uint8_t BASE_NAME_SIZE = sizeof(FILE_BASE_NAME) - 1;
+const uint8_t FILE_NAME_DIM  = BASE_NAME_SIZE + 7;
+char binName[FILE_NAME_DIM] = FILE_BASE_NAME "00.bin";
 
 SdFat sd;
 
@@ -166,6 +176,32 @@ void createBinFile() {
 void logData() {
   createBinFile();
   recordBinFile();
+  renameBinFile();
+}
+//------------------------------------------------------------------------------
+void renameBinFile() {
+  if (binFile.fileSize() == 0) {
+    return; 
+  }
+  while (sd.exists(binName)) {
+    if (binName[BASE_NAME_SIZE + 1] != '9') {
+      binName[BASE_NAME_SIZE + 1]++;
+    } else {
+      binName[BASE_NAME_SIZE + 1] = '0';
+      if (binName[BASE_NAME_SIZE] == '9') {
+        error("Can't create file name");
+      }
+      binName[BASE_NAME_SIZE]++;
+    }
+  }
+  if (!binFile.rename(sd.vwd(), binName)) {
+    error("Can't rename file");
+    }
+  Serial.print(F("File renamed: "));
+  Serial.println(binName);
+  Serial.print(F("File size: "));
+  Serial.print(binFile.fileSize()/512);
+  Serial.println(F(" blocks"));
 }
 //------------------------------------------------------------------------------
 void recordBinFile() {
@@ -346,5 +382,4 @@ void setup(void) {
 //------------------------------------------------------------------------------
 void loop(void) {
   logData();
-  while(1);
 }
