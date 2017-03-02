@@ -20,7 +20,8 @@
 #define AK8963_ASAY      0x11  // Fuse ROM y-axis sensitivity adjustment value
 #define AK8963_ASAZ      0x12  // Fuse ROM z-axis sensitivity adjustment value
 
-#define MPU9250_ADDRESS 0x69
+#define MPU9250_ADDRESS_0 0x68
+#define MPU9250_ADDRESS_1 0x69
 
 #define SELF_TEST_X_GYRO 0x00
 #define SELF_TEST_Y_GYRO 0x01

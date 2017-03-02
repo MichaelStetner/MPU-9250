@@ -61,13 +61,14 @@ uint8_t readBytes(uint8_t address, uint8_t subAddress, uint8_t count, uint8_t * 
 }
 
 
-void initMPU9250()
-{
- // wake up device
+void initMPU9250(uint8_t MPU9250_ADDRESS) {
+  checkWho(MPU9250_ADDRESS, WHO_AM_I_MPU9250, 0x71);
+  
+  // wake up device
   writeByte(MPU9250_ADDRESS, PWR_MGMT_1, 0x00); // Clear sleep mode bit (6), enable all sensors
   delay(100); // Wait for all registers to reset
 
- // get stable time source
+  // get stable time source
   writeByte(MPU9250_ADDRESS, PWR_MGMT_1, 0x01);  // Auto select clock source to be PLL gyroscope reference if ready else
   delay(200);
 
@@ -123,7 +124,8 @@ void initMPU9250()
 // Acquire a data record.
 void acquireData(data_t* data) {
   data->time = millis();
-  readBytes(MPU9250_ADDRESS, ACCEL_XOUT_H, ADC_DIM, &data->adc[0]);
+  readBytes(MPU9250_ADDRESS_0, ACCEL_XOUT_H, ADC_DIM, &data->adc[0]);
+  readBytes(MPU9250_ADDRESS_1, ACCEL_XOUT_H, ADC_DIM, &data->adc[20]);
 
   // Emit sync pulses at random
   myrand = random(10000);
@@ -133,7 +135,7 @@ void acquireData(data_t* data) {
     delayMicroseconds(SYNC_MICROSECONDS);
     digitalWrite(SYNC_PIN, LOW);
   }
-  data->adc[20] = syncNow;
+  data->adc[40] = syncNow;
 }
 
 // Sensor setup
@@ -141,28 +143,47 @@ void userSetup() {
   // I2C (two-wire interface) for communicating with MPU-9250
   I2c.begin();
   I2c.timeOut(10);
+  initMPU9250(MPU9250_ADDRESS_0);
+  initAK8963(MPU9250_ADDRESS_0);
+  initMPU9250(MPU9250_ADDRESS_1);
+  initAK8963(MPU9250_ADDRESS_1);
+  pinMode(SYNC_PIN, OUTPUT);
+}
 
-  initMPU9250();
-
-  // Read the WHO_AM_I register, this is a good test of communication
-  byte c = readByte(MPU9250_ADDRESS, WHO_AM_I_MPU9250);  // Read WHO_AM_I register for MPU-9250
-  if(c != 0x71) {
-    Serial.println("MPU9250 did not respond correctly to who am i.");
+/*
+ * Checks that device responds correctly to WHO_AM_I. If it fails, 
+ * an error message is printed to Serial and execution stops.
+ */
+void checkWho(uint8_t deviceAddr, uint8_t regAddr, uint8_t correct) {
+  byte whoIAm = readByte(deviceAddr, regAddr);
+  if (whoIAm != correct) {
+    Serial.print("Device at address 0x");
+    Serial.print(deviceAddr, HEX);
+    Serial.println(" did not respond correctly to WHO_AM_I.");
+    Serial.print("Expected 0x");
+    Serial.print(correct, HEX);
+    Serial.print(" but recieved 0x");
+    Serial.println(whoIAm, HEX);
     while(1);
   }
+}
 
-  // Set up magnetometer
-  Serial.println("");
+/*
+ * Initialize AK8963 magnetometer that is inside the MPU9250 and
+ * set it up to be an I2C slave
+ */
+void initAK8963(uint8_t MPU9250_ADDRESS) {  
+  // Tell MPU9250 to let us talk to AK8963 directly
   writeByte(MPU9250_ADDRESS, INT_PIN_CFG, 0x02); // enable pass thru when i2c master disabled
   writeByte(MPU9250_ADDRESS, USER_CTRL, B00000000); // turn off i2c master on mpu9250
   delay(500);
-  c = readByte(AK8963_ADDRESS, WHO_AM_I_AK8963);
-  Serial.print("AK8963 says I AM 0x");
-  Serial.println(c, HEX);
-  Serial.println("AK8963 should be 0x48");
+
+  
+  checkWho(AK8963_ADDRESS, WHO_AM_I_AK8963, 0x48);
+  
   writeByte(AK8963_ADDRESS, AK8963_CNTL, B00000010);
 
-  // Enable I2C master functionality
+  // Enable I2C master functionality on MPU9250
   writeByte(MPU9250_ADDRESS, I2C_MST_CTRL, B00001000);
   //  Bit   Name           Description
   //   7    MULT_MST_EN    I2C multimaster (1 to enable)
@@ -170,8 +191,6 @@ void userSetup() {
   //   5    SLV_3_FIFO_EN  Write SLV_3 data to FIFO (1 to enable)
   //   4    I2C_MST_P_NSR  Behavior between reads (0 to stop, 1 to reset)
   //  3:0   I2C_MST_CLK    I2C master clock speed (B1000 for 258kHz, slowest)
-
-  // FIXME experiment with bit 4 - what to do between reads
 
   // Configure to read from WHO_AM_I register of AK8963
   writeByte(MPU9250_ADDRESS, I2C_SLV0_ADDR, 128 + AK8963_ADDRESS);
@@ -189,8 +208,5 @@ void userSetup() {
   //  3:0   I2C_MST_CLK       Number of bytes to read (seven bytes = B0111)
 
   // Enable I2C master
-  writeByte(MPU9250_ADDRESS, USER_CTRL, B00100000);
-
-
-  pinMode(SYNC_PIN, OUTPUT);
+  writeByte(MPU9250_ADDRESS, USER_CTRL, B00100000);  
 }
