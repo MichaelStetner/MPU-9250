@@ -32,7 +32,7 @@ MinimumSerial MinSerial;
 #define ABORT_ON_OVERRUN 1
 //------------------------------------------------------------------------------
 //Interval between data records in microseconds.
-const uint32_t LOG_INTERVAL_USEC = 3333;
+const uint32_t LOG_INTERVAL_USEC =  10000;
 //------------------------------------------------------------------------------
 // Set USE_SHARED_SPI non-zero for use of an SPI sensor.
 // May not work for some cards.
@@ -250,9 +250,14 @@ void recordBinFile() {
   while(1) {
      // Time for next data record.
     logTime += LOG_INTERVAL_USEC;
-    if (Serial.available() || getI2cErrorCount() > 100) {
+    if (Serial.available()) {
+      Serial.println("Stopping due to user input");
       closeFile = true;
-    }  
+    }
+    if (getI2cErrorCount() > 100) {
+      Serial.println("Stopping because too many I2C errors");
+      closeFile = true;
+    }
     if (closeFile) {
       if (curBlock != 0) {
         // Put buffer in full queue.
@@ -273,6 +278,7 @@ void recordBinFile() {
       if ((int32_t)(logTime - micros()) < 0) {
         closeFile = true;
         Serial.println("Rate too fast");
+        while(1);
       }
       int32_t delta;
       do {
