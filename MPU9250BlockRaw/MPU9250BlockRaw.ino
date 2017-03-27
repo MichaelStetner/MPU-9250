@@ -251,6 +251,7 @@ void recordBinFile() {
      // Time for next data record.
     logTime += LOG_INTERVAL_USEC;
     if (Serial.available()) {
+      while (Serial.available()) Serial.read();
       Serial.println("Stopping due to user input");
       closeFile = true;
     }
