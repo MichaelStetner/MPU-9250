@@ -124,8 +124,8 @@ void initMPU9250(uint8_t MPU9250_ADDRESS) {
 // Acquire a data record.
 void acquireData(data_t* data) {
   data->time = millis();
-  readBytes(MPU9250_ADDRESS_0, ACCEL_XOUT_H, ADC_DIM, &data->adc[0]);
-  readBytes(MPU9250_ADDRESS_1, ACCEL_XOUT_H, ADC_DIM, &data->adc[20]);
+  readBytes(MPU9250_ADDRESS_0, ACCEL_XOUT_H, IMU_DIM, &data->adc[0]);
+  readBytes(MPU9250_ADDRESS_1, ACCEL_XOUT_H, IMU_DIM, &data->adc[IMU_DIM]);
 
   // Emit sync pulses at random
   myrand = random(10000);
@@ -135,7 +135,7 @@ void acquireData(data_t* data) {
     delayMicroseconds(SYNC_MICROSECONDS);
     digitalWrite(SYNC_PIN, LOW);
   }
-  data->adc[40] = syncNow;
+  data->adc[ADC_DIM - 1] = syncNow;
 }
 
 // Sensor setup
