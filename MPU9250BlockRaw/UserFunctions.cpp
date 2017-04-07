@@ -153,7 +153,7 @@ void acquireData(data_t* data) {
 void userSetup() {
   // I2C (two-wire interface) for communicating with MPU-9250
   Wire1.begin();
-  Wire1.setDefaultTimeout(10000);  // ten milliseconds
+  Wire1.setDefaultTimeout(1000);  // one millisecond
   initMPU9250(MPU9250_ADDRESS_0);
   initAK8963(MPU9250_ADDRESS_0);
   initMPU9250(MPU9250_ADDRESS_1);

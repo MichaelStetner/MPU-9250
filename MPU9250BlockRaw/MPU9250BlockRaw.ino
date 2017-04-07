@@ -31,7 +31,7 @@ MinimumSerial MinSerial;
 #define ABORT_ON_OVERRUN 1
 //------------------------------------------------------------------------------
 //Interval between data records in microseconds.
-const uint32_t LOG_INTERVAL_USEC =  7000;
+const uint32_t LOG_INTERVAL_USEC =  10000;
 //------------------------------------------------------------------------------
 // Set USE_SHARED_SPI non-zero for use of an SPI sensor.
 // May not work for some cards.
@@ -97,7 +97,7 @@ const uint8_t BASE_NAME_SIZE = sizeof(FILE_BASE_NAME) - 1;
 const uint8_t FILE_NAME_DIM  = BASE_NAME_SIZE + 7;
 char binName[FILE_NAME_DIM] = FILE_BASE_NAME "00.bin";
 
-SdFatSdioEX sd;
+SdFatSdio sd;
 
 SdBaseFile binFile;
 
@@ -219,8 +219,6 @@ void recordBinFile() {
   uint8_t fullHead = 0;
   uint8_t fullTail = 0;  
 
-  uint32_t lba = binFile.firstBlock();
-  
   // Use SdFat's internal buffer.
   emptyStack[0] = (block_t*)sd.vol()->cacheClear();
   if (emptyStack[0] == 0) {
@@ -234,6 +232,9 @@ void recordBinFile() {
   minTop = BUFFER_BLOCK_COUNT;
   
   // Start a multiple block write.
+  if (!sd.card()->writeStart(binFile.firstBlock())) {
+    error("writeStart failed");
+  }
   Serial.print(F("FreeStack: "));
   Serial.println(FreeStack());
   Serial.println(F("Logging - type any character to stop"));
@@ -291,8 +292,14 @@ void recordBinFile() {
         Serial.println(F("Overrun abort"));
         break;
  #endif  // ABORT_ON_OVERRUN       
-      } else { 
-        acquireData(&curBlock->data[curBlock->count++]);      
+      } else {
+#if USE_SHARED_SPI
+        sd.card()->spiStop();
+#endif  // USE_SHARED_SPI   
+        acquireData(&curBlock->data[curBlock->count++]);
+#if USE_SHARED_SPI
+        sd.card()->spiStart();
+#endif  // USE_SHARED_SPI      
         if (curBlock->count == DATA_DIM) {
           fullQueue[fullHead] = curBlock;
           fullHead = fullHead < QUEUE_LAST ? fullHead + 1 : 0;
@@ -311,7 +318,7 @@ void recordBinFile() {
       fullTail = fullTail < QUEUE_LAST ? fullTail + 1 : 0;
       // Write block to SD.
       uint32_t usec = micros();
-      if (!sd.card()->writeBlock(lba++, (uint8_t*)pBlock)) {
+      if (!sd.card()->writeData((uint8_t*)pBlock)) {
         error("write data failed");
       }
       usec = micros() - usec;
@@ -326,6 +333,9 @@ void recordBinFile() {
         break;
       }
     }
+  }
+  if (!sd.card()->writeStop()) {
+    error("writeStop failed");
   }
   Serial.print(F("Min Free buffers: "));
   Serial.println(minTop);
