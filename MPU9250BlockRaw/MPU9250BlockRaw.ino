@@ -15,7 +15,6 @@
  */
 #include "Registers.h"
 
-#include <SPI.h>
 #include "SdFat.h"
 #include "FreeStack.h"
 #include "UserTypes.h"
@@ -42,8 +41,6 @@ const uint32_t LOG_INTERVAL_USEC =  10000;
 //------------------------------------------------------------------------------
 // Pin definitions.
 //
-// SD chip select pin.
-const uint8_t SD_CS_PIN = SS;
 //
 // Digital pin to indicate an error, set to -1 if not used.
 // The led blinks for fatal errors. The led goes on solid for
@@ -100,7 +97,7 @@ const uint8_t BASE_NAME_SIZE = sizeof(FILE_BASE_NAME) - 1;
 const uint8_t FILE_NAME_DIM  = BASE_NAME_SIZE + 7;
 char binName[FILE_NAME_DIM] = FILE_BASE_NAME "00.bin";
 
-SdFat sd;
+SdFatSdio sd;
 
 SdBaseFile binFile;
 
@@ -372,16 +369,13 @@ void setup(void) {
   if (sizeof(block_t) != 512) {
     error("Invalid block size");
   }
-  // Allow userSetup access to SPI bus.
-  pinMode(SD_CS_PIN, OUTPUT);
-  digitalWrite(SD_CS_PIN, HIGH);
   
   // Setup sensors.
   userSetup();
   
   // Initialize at the highest speed supported by the board that is
   // not over 50 MHz. Try a lower speed if SPI errors occur.
-  if (!sd.begin(SD_CS_PIN, SD_SCK_MHZ(50))) {
+  if (!sd.begin()) {
     sd.initErrorPrint(&Serial);
     fatalBlink();
   }
