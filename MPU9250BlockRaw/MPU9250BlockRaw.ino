@@ -379,6 +379,10 @@ void setup(void) {
   Serial.println(FreeStack());
   Serial.print(F("Records/block: "));
   Serial.println(DATA_DIM);
+  Serial.print(F("Record bytes: "));
+  Serial.println(sizeof(data_t));
+  Serial.print(F("Fill bytes: "));
+  Serial.println(FILL_DIM);
   if (sizeof(block_t) != 512) {
     error("Invalid block size");
   }
