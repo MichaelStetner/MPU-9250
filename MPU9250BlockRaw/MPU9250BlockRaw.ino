@@ -31,7 +31,7 @@ MinimumSerial MinSerial;
 #define ABORT_ON_OVERRUN 1
 //------------------------------------------------------------------------------
 //Interval between data records in microseconds.
-const uint32_t LOG_INTERVAL_USEC =  10000;
+const uint32_t LOG_INTERVAL_USEC =  5000;
 //------------------------------------------------------------------------------
 // Set USE_SHARED_SPI non-zero for use of an SPI sensor.
 // May not work for some cards.
@@ -57,7 +57,7 @@ const int8_t ERROR_LED_PIN = -1;
 // The program creates a contiguous file with FILE_BLOCK_COUNT 512 byte blocks.
 // This file is flash erased using special SD commands.  The file will be
 // truncated if logging is stopped early.
-const uint32_t FILE_BLOCK_COUNT = 256000;
+const uint32_t FILE_BLOCK_COUNT = 65535;
 //
 // log file base name if not defined in UserTypes.h
 #ifndef FILE_BASE_NAME
@@ -97,7 +97,7 @@ const uint8_t BASE_NAME_SIZE = sizeof(FILE_BASE_NAME) - 1;
 const uint8_t FILE_NAME_DIM  = BASE_NAME_SIZE + 7;
 char binName[FILE_NAME_DIM] = FILE_BASE_NAME "00.bin";
 
-SdFatSdio sd;
+SdFatSdioEX sd;
 
 SdBaseFile binFile;
 
@@ -232,7 +232,7 @@ void recordBinFile() {
   minTop = BUFFER_BLOCK_COUNT;
   
   // Start a multiple block write.
-  if (!sd.card()->writeStart(binFile.firstBlock())) {
+  if (!sd.card()->writeStart(binFile.firstBlock(), FILE_BLOCK_COUNT)) {
     error("writeStart failed");
   }
   Serial.print(F("FreeStack: "));
@@ -334,8 +334,21 @@ void recordBinFile() {
       }
     }
   }
-  if (!sd.card()->writeStop()) {
-    error("writeStop failed");
+  /* Now we are done putting data in the file, but the SD card will continue
+   * doing the write command until it receives FILE_BLOCK_COUNT blocks. We 
+   * cannot use writestop() to end it now because that is not supported. To
+   * force it to finish, we will write empty blocks to the file until we hit the
+   * end. 
+   */
+  // Make empty block
+  uint8_t* zeroBlock = (uint8_t*) emptyStack[emptyTop];
+  for (size_t i=0; i<512; i++)
+    zeroBlock[i] = 0;
+  while(bn < FILE_BLOCK_COUNT) {
+    if (!sd.card()->writeData(zeroBlock)) {
+        error("write zero data failed");
+    }
+    bn++;
   }
   Serial.print(F("Min Free buffers: "));
   Serial.println(minTop);
