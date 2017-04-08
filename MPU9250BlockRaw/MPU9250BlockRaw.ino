@@ -50,6 +50,7 @@ const uint32_t LOG_INTERVAL_USEC =  5000;
 #undef ERROR_LED_PIN
 #endif  // ERROR_LED_PIN
 const int8_t ERROR_LED_PIN = -1;
+const int8_t BUTTON_PIN = 11; // button to terminate recording
 //------------------------------------------------------------------------------
 // File definitions.
 //
@@ -256,6 +257,10 @@ void recordBinFile() {
       Serial.println("Stopping because too many I2C errors");
       closeFile = true;
     }
+    if (digitalRead(BUTTON_PIN) == LOW) {
+      Serial.println("Stopping because button pressed");
+      closeFile = true;
+    }
     if (closeFile) {
       if (curBlock != 0) {
         // Put buffer in full queue.
@@ -369,6 +374,8 @@ void setup(void) {
   if (ERROR_LED_PIN >= 0) {
     pinMode(ERROR_LED_PIN, OUTPUT);
   }
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+  
   Serial.begin(9600);
   
   // Wait for USB Serial 
