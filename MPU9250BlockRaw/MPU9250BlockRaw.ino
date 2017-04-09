@@ -33,12 +33,6 @@ MinimumSerial MinSerial;
 //Interval between data records in microseconds.
 const uint32_t LOG_INTERVAL_USEC =  5000;
 //------------------------------------------------------------------------------
-// Set USE_SHARED_SPI non-zero for use of an SPI sensor.
-// May not work for some cards.
-#ifndef USE_SHARED_SPI
-#define USE_SHARED_SPI 0
-#endif  // USE_SHARED_SPI
-//------------------------------------------------------------------------------
 // Pin definitions.
 //
 //
@@ -310,15 +304,9 @@ void recordBinFile() {
         break;
  #endif  // ABORT_ON_OVERRUN
       } else {
-#if USE_SHARED_SPI
-        sd.card()->spiStop();
-#endif  // USE_SHARED_SPI
         ////////////////
         // Get the data
         acquireData(&curBlock->data[curBlock->count++]);
-#if USE_SHARED_SPI
-        sd.card()->spiStart();
-#endif  // USE_SHARED_SPI
         // If the current block is full, move it to the full queue. Then, we
         // don't have a current block, but we will try to get a new one at the
         // beginning of the loop
