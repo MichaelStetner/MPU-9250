@@ -179,7 +179,7 @@ void logData() {
 //------------------------------------------------------------------------------
 void renameBinFile() {
   if (binFile.fileSize() == 0) {
-    return; 
+    return;
   }
   while (sd.exists(binName)) {
     if (binName[BASE_NAME_SIZE + 1] != '9') {
@@ -206,19 +206,19 @@ void recordBinFile() {
   const uint8_t QUEUE_DIM = BUFFER_BLOCK_COUNT + 1;
   // Index of last queue location.
   const uint8_t QUEUE_LAST = QUEUE_DIM - 1;
-  
+
   // Allocate extra buffer space.
   block_t block[BUFFER_BLOCK_COUNT - 1];
-  
+
   block_t* curBlock = 0;
-  
+
   block_t* emptyStack[BUFFER_BLOCK_COUNT];
   uint8_t emptyTop;
   uint8_t minTop;
 
   block_t* fullQueue[QUEUE_DIM];
   uint8_t fullHead = 0;
-  uint8_t fullTail = 0;  
+  uint8_t fullTail = 0;
 
   // Use SdFat's internal buffer.
   emptyStack[0] = (block_t*)sd.vol()->cacheClear();
@@ -231,7 +231,7 @@ void recordBinFile() {
   }
   emptyTop = BUFFER_BLOCK_COUNT;
   minTop = BUFFER_BLOCK_COUNT;
-  
+
   // Start a multiple block write.
   if (!sd.card()->writeStart(binFile.firstBlock(), FILE_BLOCK_COUNT)) {
     error("writeStart failed");
@@ -240,14 +240,17 @@ void recordBinFile() {
   Serial.println(FreeStack());
   Serial.println(F("Logging - type any character to stop"));
   bool closeFile = false;
-  uint32_t bn = 0;  
+  uint32_t bn = 0;
   uint32_t maxLatency = 0;
   uint32_t overrun = 0;
   uint32_t overrunTotal = 0;
   uint32_t logTime = micros();
   while(1) {
+     //////////////////////////////////////////////////////////////////////////
      // Time for next data record.
     logTime += LOG_INTERVAL_USEC;
+    //////////////////////////////////////////////////////////////////////////
+    // Close file
     if (Serial.available()) {
       while (Serial.available()) Serial.read();
       Serial.println("Stopping due to user input");
@@ -268,7 +271,12 @@ void recordBinFile() {
         fullHead = fullHead < QUEUE_LAST ? fullHead + 1 : 0;
         curBlock = 0;
       }
+    //////////////////////////////////////////////////////////////////////////
+    // If not closing file, acquire data and maybe write block to file
     } else {
+      // If we don't have a current blokc and there is an empty block in the
+      // stack, take an empty block off the empty stack to be our current
+      // block.
       if (curBlock == 0 && emptyTop != 0) {
         curBlock = emptyStack[--emptyTop];
         if (emptyTop < minTop) {
@@ -278,45 +286,60 @@ void recordBinFile() {
         curBlock->overrun = overrun;
         overrun = 0;
       }
+      // Check rate
       if ((int32_t)(logTime - micros()) < 0) {
         closeFile = true;
         Serial.println("Rate too fast");
         while(1);
       }
+      // Wait for next sample
       int32_t delta;
       do {
         delta = micros() - logTime;
       } while (delta < 0);
+      // If we don't have a block and couldn't get an empty block off the
+      // stack, we have overrun our buffer!
       if (curBlock == 0) {
         overrun++;
         overrunTotal++;
         if (ERROR_LED_PIN >= 0) {
           digitalWrite(ERROR_LED_PIN, HIGH);
-        }        
+        }
 #if ABORT_ON_OVERRUN
         Serial.println(F("Overrun abort"));
         break;
- #endif  // ABORT_ON_OVERRUN       
+ #endif  // ABORT_ON_OVERRUN
       } else {
 #if USE_SHARED_SPI
         sd.card()->spiStop();
-#endif  // USE_SHARED_SPI   
+#endif  // USE_SHARED_SPI
+        ////////////////
+        // Get the data
         acquireData(&curBlock->data[curBlock->count++]);
 #if USE_SHARED_SPI
         sd.card()->spiStart();
-#endif  // USE_SHARED_SPI      
+#endif  // USE_SHARED_SPI
+        // If the current block is full, move it to the full queue. Then, we
+        // don't have a current block, but we will try to get a new one at the
+        // beginning of the loop
         if (curBlock->count == DATA_DIM) {
           fullQueue[fullHead] = curBlock;
           fullHead = fullHead < QUEUE_LAST ? fullHead + 1 : 0;
           curBlock = 0;
-        } 
+        }
       }
     }
+    ///////////////////////////////////////////////////////////////////////////
+    // If there are no full blocks and we are trying to close the file, end the
+    // acquisition loop
     if (fullHead == fullTail) {
       // Exit loop if done.
       if (closeFile) {
         break;
       }
+    ///////////////////////////////////////////////////////////////////////////
+    // If SD card is not busy, and we have full blocks, write full blocks to
+    // file
     } else if (!sd.card()->isBusy()) {
       // Get address of block to write.
       block_t* pBlock = fullQueue[fullTail];
@@ -340,15 +363,16 @@ void recordBinFile() {
     }
   }
   /* Now we are done putting data in the file, but the SD card will continue
-   * doing the write command until it receives FILE_BLOCK_COUNT blocks. We 
+   * doing the write command until it receives FILE_BLOCK_COUNT blocks. We
    * cannot use writestop() to end it now because that is not supported. To
    * force it to finish, we will write empty blocks to the file until we hit the
-   * end. 
+   * end.
    */
   // Make empty block
   uint8_t* zeroBlock = (uint8_t*) emptyStack[emptyTop];
   for (size_t i=0; i<512; i++)
     zeroBlock[i] = 0;
+  // Write empty block to file until file is full
   while(bn < FILE_BLOCK_COUNT) {
     if (!sd.card()->writeData(zeroBlock)) {
         error("write zero data failed");
@@ -375,10 +399,10 @@ void setup(void) {
     pinMode(ERROR_LED_PIN, OUTPUT);
   }
   pinMode(BUTTON_PIN, INPUT_PULLUP);
-  
+
   Serial.begin(9600);
-  
-  // Wait for USB Serial 
+
+  // Wait for USB Serial
   while (!Serial) {
     SysCall::yield();
   }
@@ -393,10 +417,10 @@ void setup(void) {
   if (sizeof(block_t) != 512) {
     error("Invalid block size");
   }
-  
+
   // Setup sensors.
   userSetup();
-  
+
   // Initialize at the highest speed supported by the board that is
   // not over 50 MHz. Try a lower speed if SPI errors occur.
   if (!sd.begin()) {
@@ -408,3 +432,31 @@ void setup(void) {
 void loop(void) {
   logData();
 }
+
+/*
+current structure is
+
+1. set closing flag
+2. get block
+3. wait for sample time
+4. check overrun
+5. acquire data (and increment block count)
+6. check for full block
+7. write blocks
+
+NEW:
+(1-4 are the same)
+5. request data
+6. write blocks (data is being received in background)
+7. read data (and increment block count)
+8. check for full block
+
+goal is to save time by writing blocks while receiving data in background.
+receiving data takes about 4ms just because of i2c communication time. Split
+"acquire data" step into two new steps: request data and read data. Request
+data happens at step 5. Moved up block writing to step 6. At this point, data
+is being received in the background. Then, at step 7 we get the data that was
+received in the background and add it to the block. Notice that we don't
+incement the block counter until the read data step (7), so the block we are
+writing to in this step is never written between requesting and read the data.
+*/
