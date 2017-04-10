@@ -96,6 +96,8 @@ SdFatSdioEX sd;
 
 SdBaseFile binFile;
 
+int32_t curTime;
+
 // Number of data records in a block.
 const uint16_t DATA_DIM = (512 - 4)/sizeof(data_t);
 
@@ -274,16 +276,15 @@ void recordBinFile() {
         overrun = 0;
       }
       // Check rate
-      if ((int32_t)(logTime - micros()) < 0) {
-        closeFile = true;
-        Serial.println("Rate too fast");
-        Serial.print("Time is  ");
-        Serial.println(micros());
-        Serial.print("Goal was ");
-        Serial.println(logTime);
-        Serial.print("count ");
-        Serial.println(curBlock->count);
-        fatalBlink();
+      curTime = micros();
+      if ((int32_t)(logTime - curTime) < 0) {
+        // closeFile = true;
+        Serial.print("Missed sample at ");
+        Serial.print(curTime);
+        Serial.print(". Running ");
+        Serial.print(curTime - logTime);
+        Serial.println(" us late.");
+        continue;
       }
       // Wait for next sample
       int32_t delta;
