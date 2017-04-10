@@ -43,7 +43,7 @@ const uint32_t LOG_INTERVAL_USEC =  5000;
 #ifdef ERROR_LED_PIN
 #undef ERROR_LED_PIN
 #endif  // ERROR_LED_PIN
-const int8_t ERROR_LED_PIN = -1;
+const int8_t ERROR_LED_PIN = 13;
 const int8_t BUTTON_PIN = 11; // button to terminate recording
 //------------------------------------------------------------------------------
 // File definitions.
@@ -118,7 +118,7 @@ void fatalBlink() {
     SysCall::yield();
     if (ERROR_LED_PIN >= 0) {
       digitalWrite(ERROR_LED_PIN, HIGH);
-      delay(200);
+      delay(800);
       digitalWrite(ERROR_LED_PIN, LOW);
       delay(200);
     }
@@ -283,7 +283,7 @@ void recordBinFile() {
         Serial.println(logTime);
         Serial.print("count ");
         Serial.println(curBlock->count);
-        while(1);
+        fatalBlink();
       }
       // Wait for next sample
       int32_t delta;
@@ -325,6 +325,7 @@ void recordBinFile() {
       // If we have full blocks and SD card is not busy, write full blocks to
       // file
       } else if (!sd.card()->isBusy()) {
+        digitalWrite(ERROR_LED_PIN, HIGH);
         // Get address of block to write.
         block_t* pBlock = fullQueue[fullTail];
         fullTail = fullTail < QUEUE_LAST ? fullTail + 1 : 0;
@@ -344,6 +345,7 @@ void recordBinFile() {
           // File full so stop
           break;
         }
+        digitalWrite(ERROR_LED_PIN, LOW);
       }
       /////////////////////////////////////////////////////////////////////////
       // Now we have finished writing blocks to file. The requested data should
@@ -401,13 +403,11 @@ void setup(void) {
     pinMode(ERROR_LED_PIN, OUTPUT);
   }
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  delay(10);
+  digitalWrite(ERROR_LED_PIN, HIGH);
 
   Serial.begin(9600);
 
-  // Wait for USB Serial
-  while (!Serial) {
-    SysCall::yield();
-  }
   Serial.print(F("\nFreeStack: "));
   Serial.println(FreeStack());
   Serial.print(F("Records/block: "));
@@ -429,6 +429,7 @@ void setup(void) {
     sd.initErrorPrint(&Serial);
     fatalBlink();
   }
+  digitalWrite(ERROR_LED_PIN, LOW);
 }
 //------------------------------------------------------------------------------
 uint32_t t1, t2, t3, t4;
