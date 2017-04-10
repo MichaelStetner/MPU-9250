@@ -234,6 +234,7 @@ void recordBinFile() {
   Serial.println(FreeStack());
   Serial.println(F("Logging - type any character to stop"));
   bool closeFile = false;
+  bool acquiringData = false;
   uint32_t bn = 0;
   uint32_t maxLatency = 0;
   uint32_t overrun = 0;
@@ -245,15 +246,6 @@ void recordBinFile() {
     logTime += LOG_INTERVAL_USEC;
     //////////////////////////////////////////////////////////////////////////
     // Close file
-    if (Serial.available()) {
-      while (Serial.available()) Serial.read();
-      Serial.println("Stopping due to user input");
-      closeFile = true;
-    }
-    if (getI2cErrorCount() > 100) {
-      Serial.println("Stopping because too many I2C errors");
-      closeFile = true;
-    }
     if (digitalRead(BUTTON_PIN) == LOW) {
       Serial.println("Stopping because button pressed");
       closeFile = true;
@@ -264,6 +256,7 @@ void recordBinFile() {
         fullQueue[fullHead] = curBlock;
         fullHead = fullHead < QUEUE_LAST ? fullHead + 1 : 0;
         curBlock = 0;
+        Serial.println("put block in queue because file closing");
       }
     //////////////////////////////////////////////////////////////////////////
     // If not closing file, acquire data and maybe write block to file
@@ -284,6 +277,12 @@ void recordBinFile() {
       if ((int32_t)(logTime - micros()) < 0) {
         closeFile = true;
         Serial.println("Rate too fast");
+        Serial.print("Time is  ");
+        Serial.println(micros());
+        Serial.print("Goal was ");
+        Serial.println(logTime);
+        Serial.print("count ");
+        Serial.println(curBlock->count);
         while(1);
       }
       // Wait for next sample
@@ -305,8 +304,55 @@ void recordBinFile() {
  #endif  // ABORT_ON_OVERRUN
       } else {
         ////////////////
-        // Get the data
-        acquireData(&curBlock->data[curBlock->count++]);
+        // Acquire the first part of the data
+        acquireData1(&curBlock->data[curBlock->count]);
+        acquiringData = true;
+      }}
+      ///////////////
+      // Now the requested data is accumulating in the RX buffer of the i2c_t3 
+      // library. That process will take about 4 ms for 2 IMUs. While that is 
+      // happening in the background, write any full blocks to file.
+      ///////////////////////////////////////////////////////////////////////////
+      // 
+      if (fullHead == fullTail) {
+        // Exit loop if done.
+        if (closeFile) {
+          // If there are no full blocks and we are trying to close the file,
+          // we are done!
+          break;
+        }
+      ///////////////////////////////////////////////////////////////////////////
+      // If we have full blocks and SD card is not busy, write full blocks to
+      // file
+      } else if (!sd.card()->isBusy()) {
+        // Get address of block to write.
+        block_t* pBlock = fullQueue[fullTail];
+        fullTail = fullTail < QUEUE_LAST ? fullTail + 1 : 0;
+        // Write block to SD.
+        uint32_t usec = micros();
+        if (!sd.card()->writeData((uint8_t*)pBlock)) {
+          error("write data failed");
+        }
+        usec = micros() - usec;
+        if (usec > maxLatency) {
+          maxLatency = usec;
+        }
+        // Move block to empty queue.
+        emptyStack[emptyTop++] = pBlock;
+        bn++;
+        if (bn == FILE_BLOCK_COUNT) {
+          // File full so stop
+          break;
+        }
+      }
+      /////////////////////////////////////////////////////////////////////////
+      // Now we have finished writing blocks to file. The requested data should
+      // be ready! Get the requested data and increment block count. If this new
+      // data fills the current block, put the current block in the full queue.
+      if (acquiringData) {
+        ////////////////
+        // Acquire the rest of the data
+        acquireData2(&curBlock->data[curBlock->count++]);
         // If the current block is full, move it to the full queue. Then, we
         // don't have a current block, but we will try to get a new one at the
         // beginning of the loop
@@ -315,41 +361,9 @@ void recordBinFile() {
           fullHead = fullHead < QUEUE_LAST ? fullHead + 1 : 0;
           curBlock = 0;
         }
-      }
-    }
-    ///////////////////////////////////////////////////////////////////////////
-    // If there are no full blocks and we are trying to close the file, end the
-    // acquisition loop
-    if (fullHead == fullTail) {
-      // Exit loop if done.
-      if (closeFile) {
-        break;
-      }
-    ///////////////////////////////////////////////////////////////////////////
-    // If SD card is not busy, and we have full blocks, write full blocks to
-    // file
-    } else if (!sd.card()->isBusy()) {
-      // Get address of block to write.
-      block_t* pBlock = fullQueue[fullTail];
-      fullTail = fullTail < QUEUE_LAST ? fullTail + 1 : 0;
-      // Write block to SD.
-      uint32_t usec = micros();
-      if (!sd.card()->writeData((uint8_t*)pBlock)) {
-        error("write data failed");
-      }
-      usec = micros() - usec;
-      if (usec > maxLatency) {
-        maxLatency = usec;
-      }
-      // Move block to empty queue.
-      emptyStack[emptyTop++] = pBlock;
-      bn++;
-      if (bn == FILE_BLOCK_COUNT) {
-        // File full so stop
-        break;
-      }
-    }
-  }
+        acquiringData = false;
+      } // acquiringData
+  } // while(1)
   /* Now we are done putting data in the file, but the SD card will continue
    * doing the write command until it receives FILE_BLOCK_COUNT blocks. We
    * cannot use writestop() to end it now because that is not supported. To
@@ -417,6 +431,7 @@ void setup(void) {
   }
 }
 //------------------------------------------------------------------------------
+uint32_t t1, t2, t3, t4;
 void loop(void) {
   logData();
 }

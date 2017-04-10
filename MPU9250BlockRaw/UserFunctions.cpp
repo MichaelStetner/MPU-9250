@@ -131,13 +131,10 @@ void initMPU9250(uint8_t MPU9250_ADDRESS) {
    delay(100);
 }
 
-
-// Acquire a data record.
-void acquireData(data_t* data) {
+void acquireData1(data_t* data) {
   data->time = millis();
   readBytes(MPU9250_ADDRESS_0, ACCEL_XOUT_H, IMU_DIM, &data->adc[0]);
-  readBytes(MPU9250_ADDRESS_1, ACCEL_XOUT_H, IMU_DIM, &data->adc[IMU_DIM]);
-
+  requestBytes(MPU9250_ADDRESS_1, ACCEL_XOUT_H, IMU_DIM);
   // Emit sync pulses at random
   myrand = random(10000);
   syncNow = (myrand < SYNC_RATE);
@@ -147,6 +144,16 @@ void acquireData(data_t* data) {
     digitalWrite(SYNC_PIN, LOW);
   }
   data->adc[ADC_DIM - 1] = syncNow;
+}
+
+// Get the data from the RX buffer of i2c_t3 library and put it in our data 
+// block. Note that the timestamp and sync pulse for this data sample was done
+// in requestData().
+void acquireData2(data_t* data) {
+  Wire1.finish();
+  for (size_t i = IMU_DIM; i < 2 * IMU_DIM; i++) {
+    data->adc[i] = Wire1.read();
+  }
 }
 
 // Sensor setup
@@ -221,3 +228,33 @@ void initAK8963(uint8_t MPU9250_ADDRESS) {
   // Enable I2C master
   writeByte(MPU9250_ADDRESS, USER_CTRL, B00100000);  
 }
+
+void requestBytes(uint8_t address, uint8_t subAddress, uint8_t count) {
+  Wire1.beginTransmission(address);
+  Wire1.write(subAddress);
+  Wire1.endTransmission();
+  Wire1.sendRequest(address, count, I2C_STOP);
+}
+
+void print_i2c_status(void)
+{
+    switch(Wire.status())
+    {
+    case I2C_WAITING:  Serial.print("I2C waiting, no errors\n"); break;
+    case I2C_ADDR_NAK: Serial.print("Slave addr not acknowledged\n"); break;
+    case I2C_DATA_NAK: Serial.print("Slave data not acknowledged\n"); break;
+    case I2C_ARB_LOST: Serial.print("Bus Error: Arbitration Lost\n"); break;
+    case I2C_TIMEOUT:  Serial.print("I2C timeout\n"); break;
+    case I2C_BUF_OVF:  Serial.print("I2C buffer overflow\n"); break;
+    default:           Serial.print("I2C busy\n"); break;
+    }
+}
+
+void i2c_finish(void) {
+  Wire1.finish();
+}
+
+uint8_t rdd() {
+  return Wire1.readByte();
+}
+
