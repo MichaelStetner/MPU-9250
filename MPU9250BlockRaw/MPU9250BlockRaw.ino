@@ -97,6 +97,7 @@ SdFatSdioEX sd;
 SdBaseFile binFile;
 
 int32_t curTime;
+int8_t numSkips = 0;
 
 // Number of data records in a block.
 const uint16_t DATA_DIM = (512 - 4)/sizeof(data_t);
@@ -251,6 +252,9 @@ void recordBinFile() {
     if (digitalRead(BUTTON_PIN) == LOW) {
       Serial.println("Stopping because button pressed");
       closeFile = true;
+    } else if (numSkips > 100) {
+      Serial.println("Stopping because too many samples missed");
+      closeFile = true;
     }
     if (closeFile) {
       if (curBlock != 0) {
@@ -284,7 +288,10 @@ void recordBinFile() {
         Serial.print(". Running ");
         Serial.print(curTime - logTime);
         Serial.println(" us late.");
+        numSkips++;
         continue;
+      } else {
+        numSkips = 0;
       }
       // Wait for next sample
       int32_t delta;
