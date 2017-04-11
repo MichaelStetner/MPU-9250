@@ -182,7 +182,12 @@ void checkWho(uint8_t deviceAddr, uint8_t regAddr, uint8_t correct) {
     Serial.print(correct, HEX);
     Serial.print(" but recieved 0x");
     Serial.println(whoIAm, HEX);
-    while(1);
+    while (true) {
+        digitalWrite(13, HIGH);
+        delay(800);
+        digitalWrite(13, LOW);
+        delay(800);
+    }
   }
 }
 
