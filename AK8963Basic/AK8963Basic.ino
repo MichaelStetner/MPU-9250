@@ -1,4 +1,5 @@
-#define MPU9250_ADDRESS 0x69  // Device address when ADO = 1
+#define MPU9250_ADDRESS_0 0x68
+#define MPU9250_ADDRESS_1 0x69
 #define INT_PIN_CFG     0x37
 
 
@@ -23,48 +24,64 @@
 
 #include <Wire.h>
 
+byte status1, status2, who;
+bool dataReady, dataOverrun, sensorOverflow;
+uint8_t magData[6];
+const int num = 1;
+
 void setup() {
   Serial.begin(38400);
   Wire.begin();
   delay(100);
 
   // Configure MPU9250 for pass thru. Now we can communicate directly with AK8963 magnetometer.
-  writeByte(MPU9250_ADDRESS, INT_PIN_CFG, 0x02);
+  if (num == 0) {
+    writeByte(MPU9250_ADDRESS_0, INT_PIN_CFG, 0x02);
+    writeByte(MPU9250_ADDRESS_1, INT_PIN_CFG, 0x00);
+    Serial.print("Talking to magnetometer in MPU9250 with address 0x");
+    Serial.println(MPU9250_ADDRESS_0, HEX);
+  } else {
+    writeByte(MPU9250_ADDRESS_0, INT_PIN_CFG, 0x00);
+    writeByte(MPU9250_ADDRESS_1, INT_PIN_CFG, 0x02);
+    Serial.print("Talking to magnetometer in MPU9250 with address 0x");
+    Serial.println(MPU9250_ADDRESS_1, HEX);
+  }
   delay(100);
 
   // Check communication with AK8963 magnetometer.
+  who = readByte(AK8963_ADDRESS, WHO_AM_I_AK8963);
   Serial.print("AK8963 says it is 0x");
-  Serial.println(readByte(AK8963_ADDRESS, WHO_AM_I_AK8963), HEX);
+  Serial.println(who, HEX);
   Serial.println("It should be 0x48");
   Serial.println("");
+  if (who != 0x48)
+    while(1);
   delay(100);
 
   // Set up AK8963 for data acquisition. This puts it in continuous measurement mode 1 (8Hz) with 14-bit output. 
   writeByte(AK8963_ADDRESS, AK8963_CNTL, B00000010);
 }
 
-byte status1, status2;
-bool dataReady, dataOverrun, sensorOverflow;
-uint8_t magData[6];
-
-
 void loop() {
   // Check for data ready and overrun
   status1 = readByte(AK8963_ADDRESS, AK8963_ST1);
   dataReady   = status1 & B00000001;
   dataOverrun = status1 & B00000010;
-  if (dataOverrun)
-    printWithMillis("overrun");
   status2 = readByte(AK8963_ADDRESS, AK8963_ST2);
   sensorOverflow = status2 & B00001000;
+  if (!dataReady) {
+    //printWithMillis("not ready");
+    delay(100);
+    return;
+  }
+  if (dataOverrun)
+    printWithMillis("overrun");
   if (sensorOverflow)
     printWithMillis("sensor overflow");
 
   // If data is ready, read it
-  if (dataReady) {
-    readBytes(AK8963_ADDRESS, AK8963_XOUT_L, 6, &magData[0]);
-    printWithMillis("data read");
-  }
+  readBytes(AK8963_ADDRESS, AK8963_XOUT_L, 6, &magData[0]);
+  printWithMillis("data read");
 }
 
 uint8_t readByte(uint8_t address, uint8_t subAddress) {
