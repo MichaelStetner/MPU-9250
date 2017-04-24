@@ -32,7 +32,7 @@ MinimumSerial MinSerial;
 #define ABORT_ON_OVERRUN 1
 //------------------------------------------------------------------------------
 //Interval between data records in microseconds.
-const uint32_t LOG_INTERVAL_USEC =  10000;
+const uint32_t LOG_INTERVAL_USEC =  6666;
 //------------------------------------------------------------------------------
 // Set USE_SHARED_SPI non-zero for use of an SPI sensor.
 // May not work for some cards.
@@ -277,9 +277,9 @@ void recordBinFile() {
         overrun = 0;
       }
       if ((int32_t)(logTime - micros()) < 0) {
-        closeFile = true;
+        Serial.print(millis());
         Serial.println("Rate too fast");
-        while(1);
+        continue;
       }
       int32_t delta;
       do {
